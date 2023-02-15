@@ -5,7 +5,9 @@ API, authentication, authorization, strategy, decorator, request - response, res
 
 
 ## Task must do
+implement config services (get variable from .env)
 implement database
+
 setup entity for user
 
 ## Features
