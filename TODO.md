@@ -3,6 +3,11 @@
 ## KEYWORD TO RESEARCH
 API, authentication, authorization, strategy, decorator, request - response, restful, [API query, path, endpoint swagger] , postgreSQL,
 
+
+## Task must do
+implement database
+setup entity for user
+
 ## Features
 
 #### Auth
