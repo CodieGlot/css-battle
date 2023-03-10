@@ -1,3 +1,7 @@
+# User-defined
+/.env
+/task.txt
+
 # Logs
 logs
 *.log
