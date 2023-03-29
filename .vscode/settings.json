@@ -1,0 +1,12 @@
+{
+    "editor.detectIndentation": false,
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "editor.tabSize": 4,
+    "todo-tree.general.tagGroups": {
+        "FIXME": [
+            "FIXIT",
+            "FIX",
+        ],
+        "RECOMMENDED": ["RECOMMENDED"]
+    },
+}
