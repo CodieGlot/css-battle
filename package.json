@@ -42,7 +42,7 @@
         "@aws-sdk/s3-request-presigner": "^3.218.0",
         "@nestjs/axios": "^1.0.0",
         "@nestjs/common": "^9.2.1",
-        "@nestjs/config": "^2.2.0",
+        "@nestjs/config": "^2.3.1",
         "@nestjs/core": "^9.2.1",
         "@nestjs/cqrs": "^9.0.1",
         "@nestjs/jwt": "^9.0.0",
@@ -77,7 +77,7 @@
         "rxjs": "^7.5.7",
         "slugify": "^1.6.5",
         "swagger-ui-express": "^4.6.0",
-        "typeorm": "^0.3.10",
+        "typeorm": "^0.3.11",
         "typeorm-transactional-cls-hooked": "^0.1.21",
         "uuid": "^9.0.0",
         "verify-apple-id-token": "^3.0.0"
