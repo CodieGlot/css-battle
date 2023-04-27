@@ -30,12 +30,12 @@ export class JwtRefreshTokenStrategy extends PassportStrategy(Strategy, 'jwt-ref
             throw new UnauthorizedException();
         }
 
-        const user = await this.userService.findByIdOrEmail({ userId: payload.userId });
+        const user = await this.userService.findUserByIdOrUsername({ id: payload.userId });
 
         if (!user) {
             throw new UnauthorizedException();
         }
 
-        return { id: user.id, email: user.email, role: user.role };
+        return { id: user.id, username: user.username, role: user.role };
     }
 }

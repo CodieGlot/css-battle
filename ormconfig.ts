@@ -6,7 +6,6 @@ import { DataSource } from 'typeorm';
 import type { SeederOptions } from 'typeorm-extension';
 
 import { UserSeeder } from './src/database/seeds';
-import { SubscriptionTransactionSubscriber, UserSubscriber } from './src/entity-subscribers';
 import { SnakeNamingStrategy } from './src/snake-naming.strategy';
 
 dotenv.config();
@@ -20,7 +19,6 @@ const options: DataSourceOptions & SeederOptions = {
     database: process.env.DB_DATABASE,
     synchronize: Boolean(process.env.ENABLE_SYNCHRONIZE),
     namingStrategy: new SnakeNamingStrategy(),
-    subscribers: [UserSubscriber, SubscriptionTransactionSubscriber],
     entities: ['src/modules/**/*.entity{.ts,.js}'],
     migrations: ['src/database/migrations/*{.ts,.js}'],
     seeds: [UserSeeder]

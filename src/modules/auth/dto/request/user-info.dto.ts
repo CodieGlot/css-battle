@@ -2,7 +2,7 @@ import { MinLength } from 'class-validator';
 
 import { StringField } from '../../../../decorators';
 
-export class UserLoginDto {
+export class UserInfoDto {
     @StringField({ minLength: 8, example: 'dexxxxxx' })
     @MinLength(8)
     readonly username: string;

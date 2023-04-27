@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import type { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { isNil } from 'lodash';
 
-import { SubscriptionTransactionSubscriber, UserSubscriber } from '../../entity-subscribers';
 import { SnakeNamingStrategy } from '../../snake-naming.strategy';
 
 @Injectable()
@@ -93,7 +92,6 @@ export class ApiConfigService {
             username: this.getString('DB_USERNAME'),
             password: this.getString('DB_PASSWORD'),
             database: this.getString('DB_DATABASE'),
-            subscribers: [UserSubscriber, SubscriptionTransactionSubscriber],
             synchronize: this.isDevelopment ? true : false,
             migrationsRun: true,
             logging: this.getBoolean('ENABLE_ORM_LOGS'),
@@ -134,7 +132,7 @@ export class ApiConfigService {
         return {
             privateKey: this.getString('JWT_PRIVATE_KEY'),
             publicKey: this.getString('JWT_PUBLIC_KEY'),
-            jwtExpirationTime: this.getNumber('JWT_EXPIRATION_TIME') ?? 3600
+            jwtExpirationTime: this.getNumber('JWT_EXPIRATION_TIME') ?? 7200
         };
     }
 

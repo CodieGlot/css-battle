@@ -21,10 +21,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             throw new UnauthorizedException();
         }
 
-        const user = await this.usersService.findOne({
+        const user = await this.usersService.findUserByIdOrUsername({
             // FIXME: issue with type casts
-            id: args.userId as never,
-            role: args.role
+            id: args.userId as never
         });
 
         if (!user) {
