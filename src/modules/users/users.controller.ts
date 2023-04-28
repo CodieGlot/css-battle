@@ -24,15 +24,15 @@ export class UsersController {
         return this.usersService.getAllParticipants();
     }
 
-    @Delete(':username')
+    @Delete(':id')
     @Auth([UserRole.ADMIN])
     @HttpCode(HttpStatus.ACCEPTED)
     @ApiAcceptedResponse({
         type: ResponseDto,
         description: 'Delete user successfully'
     })
-    @ApiOperation({ summary: 'Delete user by username' })
-    async deleteUserByUsername(@Param('username') username: string) {
-        return this.usersService.deleteUser(username);
+    @ApiOperation({ summary: 'Delete user by id' })
+    async deleteUserById(@Param('id') id: string) {
+        return this.usersService.deleteUser(id);
     }
 }

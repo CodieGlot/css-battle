@@ -35,7 +35,7 @@ export class AuthController {
         return new LoginPayloadDto(userEntity.toResponseDto(), token);
     }
 
-    @Post('create-users')
+    @Post('create-multiple')
     @Auth([UserRole.ADMIN])
     @HttpCode(HttpStatus.CREATED)
     @ApiCreatedResponse({
@@ -43,8 +43,20 @@ export class AuthController {
         description: 'Create new users'
     })
     @ApiOperation({ summary: 'Create new users' })
-    createUsers(@Body() dto: CreateUsersDto) {
-        return this.usersService.createUsers(dto);
+    async createUsers(@Body() createUsersDto: CreateUsersDto) {
+        return this.usersService.createUsers(createUsersDto);
+    }
+
+    @Post('create-from-sheet')
+    @Auth([UserRole.ADMIN])
+    @HttpCode(HttpStatus.CREATED)
+    @ApiCreatedResponse({
+        type: ResponseDto,
+        description: 'Create new users'
+    })
+    @ApiOperation({ summary: 'Create new users' })
+    async createUsersFromSheet() {
+        return this.usersService.createUsersFromSheet();
     }
 
     @Version('1')

@@ -3,12 +3,18 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { ResponseDto } from '../../common/dto';
-import type { CreateQuestionsDto, UpdateQuestionDto } from './dto/request';
+import type { CreateQuestionsDto, NewQuestionDto, UpdateQuestionDto } from './dto/request';
 import { Question } from './entities';
 
 @Injectable()
 export class QuestionsService {
     constructor(@InjectRepository(Question) private readonly questionRepository: Repository<Question>) {}
+
+    async createQuestion(dto: NewQuestionDto) {
+        const questionEntity = this.questionRepository.create(dto);
+
+        return this.questionRepository.save(questionEntity);
+    }
 
     async createQuestions(dto: CreateQuestionsDto) {
         const promiseSaveQuestions = dto.questions.map(async (question) => {

@@ -4,7 +4,7 @@ import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestj
 import { ResponseDto } from '../../common/dto';
 import { UserRole } from '../../constants';
 import { Auth } from '../../decorators';
-import { CreateQuestionsDto, UpdateQuestionDto } from './dto/request';
+import { CreateQuestionsDto, NewQuestionDto, UpdateQuestionDto } from './dto/request';
 import { QuestionDto } from './dto/response';
 import { QuestionsService } from './questions.service';
 
@@ -14,6 +14,18 @@ export class QuestionsController {
     constructor(private readonly questionsService: QuestionsService) {}
 
     @Post()
+    @Auth([UserRole.ADMIN])
+    @HttpCode(HttpStatus.CREATED)
+    @ApiCreatedResponse({
+        description: 'Create new question',
+        type: QuestionDto
+    })
+    @ApiOperation({ summary: 'Create new question' })
+    async createQuestion(@Body() newQuestionDto: NewQuestionDto) {
+        return this.questionsService.createQuestion(newQuestionDto);
+    }
+
+    @Post('create-multiple')
     @Auth([UserRole.ADMIN])
     @HttpCode(HttpStatus.CREATED)
     @ApiCreatedResponse({
