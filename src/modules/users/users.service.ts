@@ -1,13 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import Excel from 'exceljs';
 import path from 'path';
 import { Repository } from 'typeorm';
 
 import { ResponseDto } from '../../common/dto';
-import { generateHash } from '../../common/utils';
+import { generateHash, validateHash } from '../../common/utils';
 import { AccountStatus, UserRole } from '../../constants';
 import type { CreateUsersDto } from '../auth/dto/request';
+import type { ResetPasswordDto, UploadAvatarDto } from './dto/request';
 import { User } from './entities';
 
 @Injectable()
@@ -110,7 +111,35 @@ export class UsersService {
 
         await workbook.xlsx.writeFile(filePath);
 
-        return new ResponseDto({ message: 'Create users successfuult' });
+        return new ResponseDto({ message: 'Create users successfully' });
+    }
+
+    getCellValue(row: Excel.Row, cellIndex: number) {
+        const cell = row.getCell(cellIndex);
+
+        return cell.value ? cell.value.toString() : undefined;
+    }
+
+    async uploadAvatar(id: string, dto: UploadAvatarDto) {
+        await this.findUserByIdOrUsername({ id });
+
+        await this.userRepository.update(id, dto);
+
+        return new ResponseDto({ message: 'Upload avatar successfully' });
+    }
+
+    async resetPassword(id: string, dto: ResetPasswordDto) {
+        const user = await this.findUserByIdOrUsername({ id });
+
+        const isPasswordValid = await validateHash(dto.oldPassword, user?.password);
+
+        if (!isPasswordValid) {
+            throw new BadRequestException();
+        }
+
+        await this.userRepository.update(id, { password: generateHash(dto.newPassword) });
+
+        return new ResponseDto({ message: 'Reset password successfully' });
     }
 
     async deleteUser(id: string): Promise<ResponseDto> {
@@ -118,12 +147,6 @@ export class UsersService {
 
         await this.userRepository.delete(id);
 
-        return new ResponseDto({ message: 'User deleted successfully!' });
-    }
-
-    getCellValue(row: Excel.Row, cellIndex: number) {
-        const cell = row.getCell(cellIndex);
-
-        return cell.value ? cell.value.toString() : undefined;
+        return new ResponseDto({ message: 'User deleted successfully' });
     }
 }
