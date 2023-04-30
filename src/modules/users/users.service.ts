@@ -1,14 +1,15 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { faker } from '@faker-js/faker';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import Excel from 'exceljs';
 import path from 'path';
 import { Repository } from 'typeorm';
 
 import { ResponseDto } from '../../common/dto';
-import { generateHash, validateHash } from '../../common/utils';
-import { AccountStatus, UserRole } from '../../constants';
-import type { CreateUsersDto } from '../auth/dto/request';
-import type { ResetPasswordDto, UploadAvatarDto } from './dto/request';
+import { generateHash } from '../../common/utils';
+import { AccountStatus, defaultPassword, UserRole } from '../../constants';
+import type { CreateUsersDto, UserInfoDto } from '../auth/dto/request';
+import type { ResetPasswordDto } from './dto/request';
 import { User } from './entities';
 
 @Injectable()
@@ -28,6 +29,22 @@ export class UsersService {
         return this.userRepository.find({ where: { role: UserRole.USER } });
     }
 
+    async createUser(dto: UserInfoDto) {
+        const user = await this.findUserByIdOrUsername({ username: dto.username });
+
+        if (user) {
+            throw new ConflictException('User already exists');
+        }
+
+        const userEntity = this.userRepository.create({
+            username: dto.username,
+            password: dto.password,
+            avatarUrl: faker.image.avatar()
+        });
+
+        return this.userRepository.save(userEntity);
+    }
+
     async createUsers(dto: CreateUsersDto) {
         const promiseSavedUsers = dto.userInfos.map(async (user) => {
             const hasSavedUser = await this.findUserByIdOrUsername({ username: user.username });
@@ -40,7 +57,8 @@ export class UsersService {
 
             const userEntity = this.userRepository.create({
                 username: user.username,
-                password: hashPassword
+                password: hashPassword,
+                avatarUrl: faker.image.avatar()
             });
 
             return this.userRepository.save(userEntity);
@@ -80,13 +98,14 @@ export class UsersService {
                 return null;
             }
 
-            const password = Math.random().toString(36).slice(2, 10);
+            const password = defaultPassword;
 
             userInfos.push({ password, status: AccountStatus.CREATED });
 
             const userEntity = this.userRepository.create({
                 username,
-                password: generateHash(password)
+                password: generateHash(password),
+                avatarUrl: faker.image.avatar()
             });
 
             return this.userRepository.save(userEntity);
@@ -120,24 +139,20 @@ export class UsersService {
         return cell.value ? cell.value.toString() : undefined;
     }
 
-    async uploadAvatar(id: string, dto: UploadAvatarDto) {
+    async resetPassByAdmin(id: string) {
         await this.findUserByIdOrUsername({ id });
 
-        await this.userRepository.update(id, dto);
+        await this.userRepository.update(id, { password: generateHash(defaultPassword) });
 
-        return new ResponseDto({ message: 'Upload avatar successfully' });
+        return new ResponseDto({ message: 'Reset password successfully' });
     }
 
-    async resetPassword(id: string, dto: ResetPasswordDto) {
-        const user = await this.findUserByIdOrUsername({ id });
-
-        const isPasswordValid = await validateHash(dto.oldPassword, user?.password);
-
-        if (!isPasswordValid) {
-            throw new BadRequestException();
+    async changePassword(id: string, dto: ResetPasswordDto) {
+        if (dto.firstPassword !== dto.secondPassword) {
+            throw new BadRequestException('Password not match');
         }
 
-        await this.userRepository.update(id, { password: generateHash(dto.newPassword) });
+        await this.userRepository.update(id, { password: generateHash(dto.firstPassword) });
 
         return new ResponseDto({ message: 'Reset password successfully' });
     }

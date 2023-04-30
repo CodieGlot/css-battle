@@ -10,7 +10,7 @@ import { User } from '../users/entities';
 import { UsersService } from '../users/users.service';
 import { AuthService } from './auth.service';
 import { LoginPayloadDto, UserLoginDto } from './dto';
-import { CreateUsersDto } from './dto/request';
+import { CreateUsersDto, UserInfoDto } from './dto/request';
 
 @Controller('auth')
 @ApiTags('auth')
@@ -33,6 +33,18 @@ export class AuthController {
         });
 
         return new LoginPayloadDto(userEntity.toResponseDto(), token);
+    }
+
+    @Post('create')
+    @Auth([UserRole.ADMIN])
+    @HttpCode(HttpStatus.CREATED)
+    @ApiCreatedResponse({
+        type: ResponseDto,
+        description: 'Create a new user'
+    })
+    @ApiOperation({ summary: 'Create a new user' })
+    async createUser(@Body() userInfoDto: UserInfoDto) {
+        return this.usersService.createUser(userInfoDto);
     }
 
     @Post('create-multiple')

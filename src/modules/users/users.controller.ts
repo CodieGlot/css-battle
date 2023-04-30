@@ -4,7 +4,7 @@ import { ApiAcceptedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nest
 import { ResponseDto } from '../../common/dto';
 import { UserRole } from '../../constants';
 import { Auth, AuthUser } from '../../decorators';
-import { ResetPasswordDto, UploadAvatarDto } from './dto/request';
+import { ResetPasswordDto } from './dto/request';
 import { User } from './entities';
 import { UsersService } from './users.service';
 
@@ -25,16 +25,28 @@ export class UsersController {
         return this.usersService.getAllParticipants();
     }
 
-    @Patch('upload-avatar')
-    @Auth([UserRole.ADMIN, UserRole.USER])
+    @Get(':username')
+    @Auth([UserRole.ADMIN])
+    @HttpCode(HttpStatus.OK)
+    @ApiOkResponse({
+        type: User,
+        description: 'Get user by username'
+    })
+    @ApiOperation({ summary: 'Get user by username' })
+    async getUserByUsername(@Param('username') username: string) {
+        return this.usersService.findUserByIdOrUsername({ username });
+    }
+
+    @Patch('reset-password/:id')
+    @Auth([UserRole.ADMIN])
     @HttpCode(HttpStatus.OK)
     @ApiOkResponse({
         type: ResponseDto,
-        description: 'Upload avatar successfully'
+        description: 'Reset password by admin'
     })
-    @ApiOperation({ summary: 'Upload avatar' })
-    async uploadAvatar(@Body() uploadAvatarDto: UploadAvatarDto, @AuthUser() user: User) {
-        return this.usersService.uploadAvatar(user.id, uploadAvatarDto);
+    @ApiOperation({ summary: 'Reset password by admin' })
+    async resetPassByAdmin(@Param('id') id: string) {
+        return this.usersService.resetPassByAdmin(id);
     }
 
     @Patch('reset-password')
@@ -46,7 +58,7 @@ export class UsersController {
     })
     @ApiOperation({ summary: 'Reset password' })
     async resetPassword(@Body() resetPasswordDto: ResetPasswordDto, @AuthUser() user: User) {
-        return this.usersService.resetPassword(user.id, resetPasswordDto);
+        return this.usersService.changePassword(user.id, resetPasswordDto);
     }
 
     @Delete(':id')

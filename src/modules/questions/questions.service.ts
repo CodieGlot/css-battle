@@ -36,6 +36,10 @@ export class QuestionsService {
         return question.toResponseDto();
     }
 
+    async getAllQuestions() {
+        return this.questionRepository.find();
+    }
+
     async updateQuestionById(id: string, dto: UpdateQuestionDto) {
         const question = await this.findQuestionById(id);
 

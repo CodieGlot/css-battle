@@ -37,6 +37,18 @@ export class QuestionsController {
         return this.questionsService.createQuestions(createQuestionsDto);
     }
 
+    @Get()
+    @Auth([UserRole.ADMIN])
+    @HttpCode(HttpStatus.OK)
+    @ApiOkResponse({
+        description: 'Get all questions',
+        type: [QuestionDto]
+    })
+    @ApiOperation({ summary: 'Get all questions' })
+    async getAllQuestions() {
+        return this.questionsService.getAllQuestions();
+    }
+
     @Get(':id')
     @Auth([UserRole.ADMIN])
     @HttpCode(HttpStatus.OK)
