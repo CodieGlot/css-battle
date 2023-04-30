@@ -17,6 +17,6 @@ export class User extends AbstractEntity<UserDto> {
     @Column()
     password: string;
 
-    @Column()
+    @Column({ nullable: true })
     avatarUrl: string;
 }
