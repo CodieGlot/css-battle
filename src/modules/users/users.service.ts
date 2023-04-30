@@ -38,7 +38,7 @@ export class UsersService {
 
         const userEntity = this.userRepository.create({
             username: dto.username,
-            password: dto.password,
+            password: generateHash(dto.password),
             avatarUrl: faker.image.avatar()
         });
 
@@ -53,11 +53,9 @@ export class UsersService {
                 return null;
             }
 
-            const hashPassword = generateHash(user.password);
-
             const userEntity = this.userRepository.create({
                 username: user.username,
-                password: hashPassword,
+                password: generateHash(user.password),
                 avatarUrl: faker.image.avatar()
             });
 
