@@ -11,9 +11,13 @@ export class UserDto extends AbstractDto {
     @ApiProperty()
     username: string;
 
+    @ApiProperty()
+    avatarUrl: string;
+
     constructor(user: User) {
         super(user);
         this.role = user.role;
         this.username = user.username;
+        this.avatarUrl = user.avatarUrl;
     }
 }

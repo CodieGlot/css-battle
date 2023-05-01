@@ -11,6 +11,7 @@ import { ResponseDto } from '../../common/dto';
 import { UserRole } from '../../constants';
 import { Auth, AuthUser } from '../../decorators';
 import { CreateUsersDto, ResetPasswordDto, UserInfoDto } from './dto/request';
+import { UserDto } from './dto/response';
 import { User } from './entities';
 import { UsersService } from './users.service';
 
@@ -23,24 +24,28 @@ export class UsersController {
     @Auth([UserRole.ADMIN])
     @HttpCode(HttpStatus.CREATED)
     @ApiCreatedResponse({
-        type: ResponseDto,
+        type: UserDto,
         description: 'Create a new user'
     })
     @ApiOperation({ summary: 'Create a new user' })
     async createUser(@Body() userInfoDto: UserInfoDto) {
-        return this.usersService.createUser(userInfoDto);
+        const user = await this.usersService.createUser(userInfoDto);
+
+        return user.toResponseDto();
     }
 
     @Post('create-multiple')
     @Auth([UserRole.ADMIN])
     @HttpCode(HttpStatus.CREATED)
     @ApiCreatedResponse({
-        type: ResponseDto,
+        type: [UserDto],
         description: 'Create new users'
     })
     @ApiOperation({ summary: 'Create new users' })
     async createUsers(@Body() createUsersDto: CreateUsersDto) {
-        return this.usersService.createUsers(createUsersDto);
+        const users = await this.usersService.createUsers(createUsersDto);
+
+        return users.map((user) => user?.toResponseDto());
     }
 
     @Post('create-from-sheet')
@@ -64,7 +69,9 @@ export class UsersController {
     })
     @ApiOperation({ summary: 'Get all participants' })
     async getAllParticipants() {
-        return this.usersService.getAllParticipants();
+        const users = await this.usersService.getAllParticipants();
+
+        return users.map((user) => user.toResponseDto());
     }
 
     @Get(':username')
@@ -76,7 +83,9 @@ export class UsersController {
     })
     @ApiOperation({ summary: 'Get user by username' })
     async getUserByUsername(@Param('username') username: string) {
-        return this.usersService.findUserByIdOrUsername({ username });
+        const user = await this.usersService.findUserByIdOrUsername({ username });
+
+        return user?.toResponseDto();
     }
 
     @Patch('reset-password/:id')
