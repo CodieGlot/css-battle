@@ -1,10 +1,16 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch } from '@nestjs/common';
-import { ApiAcceptedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post } from '@nestjs/common';
+import {
+    ApiAcceptedResponse,
+    ApiCreatedResponse,
+    ApiOkResponse,
+    ApiOperation,
+    ApiTags
+} from '@nestjs/swagger';
 
 import { ResponseDto } from '../../common/dto';
 import { UserRole } from '../../constants';
 import { Auth, AuthUser } from '../../decorators';
-import { ResetPasswordDto } from './dto/request';
+import { CreateUsersDto, ResetPasswordDto, UserInfoDto } from './dto/request';
 import { User } from './entities';
 import { UsersService } from './users.service';
 
@@ -12,6 +18,42 @@ import { UsersService } from './users.service';
 @Controller('users')
 export class UsersController {
     constructor(private readonly usersService: UsersService) {}
+
+    @Post('create')
+    @Auth([UserRole.ADMIN])
+    @HttpCode(HttpStatus.CREATED)
+    @ApiCreatedResponse({
+        type: ResponseDto,
+        description: 'Create a new user'
+    })
+    @ApiOperation({ summary: 'Create a new user' })
+    async createUser(@Body() userInfoDto: UserInfoDto) {
+        return this.usersService.createUser(userInfoDto);
+    }
+
+    @Post('create-multiple')
+    @Auth([UserRole.ADMIN])
+    @HttpCode(HttpStatus.CREATED)
+    @ApiCreatedResponse({
+        type: ResponseDto,
+        description: 'Create new users'
+    })
+    @ApiOperation({ summary: 'Create new users' })
+    async createUsers(@Body() createUsersDto: CreateUsersDto) {
+        return this.usersService.createUsers(createUsersDto);
+    }
+
+    @Post('create-from-sheet')
+    @Auth([UserRole.ADMIN])
+    @HttpCode(HttpStatus.CREATED)
+    @ApiCreatedResponse({
+        type: ResponseDto,
+        description: 'Create new users'
+    })
+    @ApiOperation({ summary: 'Create new users' })
+    async createUsersFromSheet() {
+        return this.usersService.createUsersFromSheet();
+    }
 
     @Get()
     @Auth([UserRole.ADMIN])

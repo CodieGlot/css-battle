@@ -8,7 +8,7 @@ import { TimeExpression, Token } from '../../constants';
 import { ApiConfigService } from '../../shared/services/api-config.service';
 import type { User } from '../users/entities';
 import { UsersService } from '../users/users.service';
-import type { UserLoginDto } from './dto/request/user-login.dto';
+import type { UserCredentialDto } from './dto/request/user-credential.dto';
 import { TokenPayloadDto } from './dto/response/token-payload.dto';
 
 @Injectable()
@@ -43,7 +43,7 @@ export class AuthService {
         });
     }
 
-    async validateUser(dto: UserLoginDto): Promise<User> {
+    async validateUser(dto: UserCredentialDto): Promise<User> {
         const user = await this.usersService.findUserByIdOrUsername({ username: dto.username });
 
         if (!user) {

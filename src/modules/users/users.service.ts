@@ -8,8 +8,7 @@ import { Repository } from 'typeorm';
 import { ResponseDto } from '../../common/dto';
 import { generateHash } from '../../common/utils';
 import { AccountStatus, defaultPassword, UserRole } from '../../constants';
-import type { CreateUsersDto, UserInfoDto } from '../auth/dto/request';
-import type { ResetPasswordDto } from './dto/request';
+import type { CreateUsersDto, ResetPasswordDto, UserInfoDto } from './dto/request';
 import { User } from './entities';
 
 @Injectable()

@@ -9,8 +9,7 @@ import { UserDto } from '../users/dto/response/user.dto';
 import { User } from '../users/entities';
 import { UsersService } from '../users/users.service';
 import { AuthService } from './auth.service';
-import { LoginPayloadDto, UserLoginDto } from './dto';
-import { CreateUsersDto, UserInfoDto } from './dto/request';
+import { LoginPayloadDto, UserCredentialDto } from './dto';
 
 @Controller('auth')
 @ApiTags('auth')
@@ -24,7 +23,7 @@ export class AuthController {
         description: 'User info with access token'
     })
     @ApiOperation({ summary: 'Login with credentials' })
-    async userLogin(@Body() userLoginDto: UserLoginDto): Promise<LoginPayloadDto> {
+    async userLogin(@Body() userLoginDto: UserCredentialDto): Promise<LoginPayloadDto> {
         const userEntity = await this.authService.validateUser(userLoginDto);
 
         const token = await this.authService.createAccessToken({
@@ -35,40 +34,22 @@ export class AuthController {
         return new LoginPayloadDto(userEntity.toResponseDto(), token);
     }
 
-    @Post('create')
-    @Auth([UserRole.ADMIN])
+    @Post('register')
     @HttpCode(HttpStatus.CREATED)
     @ApiCreatedResponse({
         type: ResponseDto,
-        description: 'Create a new user'
+        description: 'Successfully Registered'
     })
-    @ApiOperation({ summary: 'Create a new user' })
-    async createUser(@Body() userInfoDto: UserInfoDto) {
-        return this.usersService.createUser(userInfoDto);
-    }
+    @ApiOperation({ summary: 'Register with Email/Password' })
+    async userRegister(@Body() dto: UserCredentialDto) {
+        const user = await this.usersService.createUser(dto);
 
-    @Post('create-multiple')
-    @Auth([UserRole.ADMIN])
-    @HttpCode(HttpStatus.CREATED)
-    @ApiCreatedResponse({
-        type: ResponseDto,
-        description: 'Create new users'
-    })
-    @ApiOperation({ summary: 'Create new users' })
-    async createUsers(@Body() createUsersDto: CreateUsersDto) {
-        return this.usersService.createUsers(createUsersDto);
-    }
+        const token = await this.authService.createAccessToken({
+            userId: user.id,
+            role: user.role
+        });
 
-    @Post('create-from-sheet')
-    @Auth([UserRole.ADMIN])
-    @HttpCode(HttpStatus.CREATED)
-    @ApiCreatedResponse({
-        type: ResponseDto,
-        description: 'Create new users'
-    })
-    @ApiOperation({ summary: 'Create new users' })
-    async createUsersFromSheet() {
-        return this.usersService.createUsersFromSheet();
+        return new LoginPayloadDto(user, token);
     }
 
     @Version('1')
