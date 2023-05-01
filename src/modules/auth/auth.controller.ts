@@ -40,7 +40,7 @@ export class AuthController {
         type: ResponseDto,
         description: 'Successfully Registered'
     })
-    @ApiOperation({ summary: 'Register with Email/Password' })
+    @ApiOperation({ summary: 'Register with username and password' })
     async userRegister(@Body() dto: UserCredentialDto) {
         const user = await this.usersService.createUser(dto);
 
