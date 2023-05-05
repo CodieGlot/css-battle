@@ -1,13 +1,17 @@
 import { faker } from '@faker-js/faker';
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import Excel from 'exceljs';
+import { verify } from 'jsonwebtoken';
 import path from 'path';
+import type { Socket } from 'socket.io';
 import { Repository } from 'typeorm';
 
 import { ResponseDto } from '../../common/dto';
 import { generateHash } from '../../common/utils';
 import { AccountStatus, defaultPassword, UserRole } from '../../constants';
+import type ITokenPayload from '../../interfaces/token-payload.interface';
+import { ApiConfigService } from '../../shared/services/api-config.service';
 import type { CreateUsersDto, ResetPasswordDto, UserInfoDto } from './dto/request';
 import { User } from './entities';
 
@@ -15,8 +19,24 @@ import { User } from './entities';
 export class UsersService {
     constructor(
         @InjectRepository(User)
-        private readonly userRepository: Repository<User>
+        private readonly userRepository: Repository<User>,
+        private readonly configService: ApiConfigService
     ) {}
+
+    async getUserFromSocket(socket: Socket) {
+        let token = socket.handshake.headers.authorization;
+        token = token?.split(' ')[1];
+
+        const payload = verify(token as string, this.configService.authConfig.publicKey) as ITokenPayload;
+
+        const user = await this.findUserByIdOrUsername({ id: payload.userId });
+
+        if (!user) {
+            throw new UnauthorizedException('User not found');
+        }
+
+        return user.toResponseDto();
+    }
 
     async findUserByIdOrUsername({ id, username }: { id?: string; username?: string }) {
         return id

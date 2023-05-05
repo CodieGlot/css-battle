@@ -6,8 +6,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthModule } from './modules/auth/auth.module';
-import { GatewayModule } from './modules/gateway/gateway.module';
 import { QuestionsModule } from './modules/questions/questions.module';
+import { RoomModule } from './modules/room/room.module';
 import { UsersModule } from './modules/users/users.module';
 import { ApiConfigService } from './shared/services/api-config.service';
 import { SharedModule } from './shared/shared.module';
@@ -27,7 +27,7 @@ import { SharedModule } from './shared/shared.module';
         UsersModule,
         ScheduleModule.forRoot(),
         QuestionsModule,
-        GatewayModule
+        RoomModule
     ],
     providers: []
 })

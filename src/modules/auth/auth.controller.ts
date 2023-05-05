@@ -49,7 +49,7 @@ export class AuthController {
             role: user.role
         });
 
-        return new LoginPayloadDto(user, token);
+        return new LoginPayloadDto(user.toResponseDto(), token);
     }
 
     @Version('1')

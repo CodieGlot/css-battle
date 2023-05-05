@@ -74,16 +74,16 @@ export class UsersController {
         return users.map((user) => user.toResponseDto());
     }
 
-    @Get(':username')
+    @Get(':id')
     @Auth([UserRole.ADMIN])
     @HttpCode(HttpStatus.OK)
     @ApiOkResponse({
         type: User,
-        description: 'Get user by username'
+        description: 'Get user by id'
     })
-    @ApiOperation({ summary: 'Get user by username' })
-    async getUserByUsername(@Param('username') username: string) {
-        const user = await this.usersService.findUserByIdOrUsername({ username });
+    @ApiOperation({ summary: 'Get user by id' })
+    async getUserByUsername(@Param('id') id: string) {
+        const user = await this.usersService.findUserByIdOrUsername({ id });
 
         return user?.toResponseDto();
     }
