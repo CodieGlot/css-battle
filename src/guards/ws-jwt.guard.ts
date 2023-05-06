@@ -11,17 +11,19 @@ export class WsJwtGuard implements CanActivate {
     constructor(private readonly configService: ApiConfigService) {}
 
     canActivate(context: ExecutionContext): boolean | Promise<boolean> | Observable<boolean> {
-        if (context.getType() !== 'ws') {
-            return true;
-        }
-
         const socket: Socket = context.switchToWs().getClient();
 
         const { authorization } = socket.handshake.headers;
         const token = authorization?.split(' ')[1];
 
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const payload = verify(token as string, this.configService.authConfig.publicKey);
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const payload = verify(token as string, this.configService.authConfig.publicKey);
+        } catch {
+            socket.emit('error', 'UNAUTHORIZED');
+
+            return false;
+        }
 
         return true;
     }

@@ -3,7 +3,7 @@ import { Column, Entity } from 'typeorm';
 import { AbstractEntity } from '../../../common/abstract.entity';
 import { RoomStatus } from '../../../constants';
 import { UseDto } from '../../../decorators';
-import type { UserDto } from '../../users/dto/response';
+import type { PlayerDto } from '../dto/response';
 import { RoomDto } from '../dto/response';
 
 @Entity()
@@ -14,15 +14,15 @@ export class Room extends AbstractEntity<RoomDto> {
 
     @Column('simple-json', {
         transformer: {
-            to(value: UserDto[]): string {
+            to(value: PlayerDto[]): string {
                 return JSON.stringify(value);
             },
-            from(value: string): UserDto[] {
+            from(value: string): PlayerDto[] {
                 return JSON.parse(value);
             }
         }
     })
-    participants: UserDto[];
+    participants: PlayerDto[];
 
     @Column()
     roomCode: string;

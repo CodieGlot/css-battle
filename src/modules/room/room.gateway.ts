@@ -9,7 +9,7 @@ import {
 import { Server, Socket } from 'socket.io';
 
 import { WsJwtGuard } from '../../guards';
-import { UsersService } from '../users/users.service';
+import { RoomCodeDto, UpdateStatusDto } from './dto/request';
 import { RoomService } from './room.service';
 
 @WebSocketGateway({
@@ -20,34 +20,33 @@ import { RoomService } from './room.service';
 })
 @UseGuards(WsJwtGuard)
 export class RoomGateway {
-    constructor(private readonly roomService: RoomService, private readonly usersService: UsersService) {}
+    constructor(private readonly roomService: RoomService) {}
 
     @WebSocketServer()
     server: Server;
 
     @SubscribeMessage('findAllActiveRooms')
-    async findAll() {
-        return this.roomService.findAll();
+    async findAllActiveRooms() {
+        return this.roomService.findAllActiveRooms();
     }
 
     @SubscribeMessage('createRoom')
     async createRoom(@ConnectedSocket() socket: Socket) {
-        const user = await this.usersService.getUserFromSocket(socket);
-
-        return this.roomService.createRoom(socket, user);
+        return this.roomService.createRoom(socket);
     }
 
     @SubscribeMessage('joinRoom')
-    async joinRoom(@ConnectedSocket() socket: Socket, @MessageBody() roomCode: string) {
-        const user = await this.usersService.getUserFromSocket(socket);
-
-        return this.roomService.joinRoom(socket, user, roomCode);
+    async joinRoom(@ConnectedSocket() socket: Socket, @MessageBody() roomCodeDto: RoomCodeDto) {
+        return this.roomService.joinRoom(socket, roomCodeDto);
     }
 
     @SubscribeMessage('leaveRoom')
-    async leaveRoom(@ConnectedSocket() socket: Socket, @MessageBody() roomCode: string) {
-        const user = await this.usersService.getUserFromSocket(socket);
+    async leaveRoom(@ConnectedSocket() socket: Socket, @MessageBody() roomCodeDto: RoomCodeDto) {
+        return this.roomService.leaveRoom(socket, roomCodeDto);
+    }
 
-        return this.roomService.leaveRoom(socket, user, roomCode);
+    @SubscribeMessage('updateStatus')
+    async updateStatus(@ConnectedSocket() socket: Socket, @MessageBody() updateStatusDto: UpdateStatusDto) {
+        return this.roomService.updateStatus(socket, updateStatusDto);
     }
 }

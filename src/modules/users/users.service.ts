@@ -9,9 +9,10 @@ import { Repository } from 'typeorm';
 
 import { ResponseDto } from '../../common/dto';
 import { generateHash } from '../../common/utils';
-import { AccountStatus, defaultPassword, UserRole } from '../../constants';
+import { AccountStatus, defaultPassword, PlayerStatus, UserRole } from '../../constants';
 import type ITokenPayload from '../../interfaces/token-payload.interface';
 import { ApiConfigService } from '../../shared/services/api-config.service';
+import { PlayerDto } from '../room/dto/response';
 import type { CreateUsersDto, ResetPasswordDto, UserInfoDto } from './dto/request';
 import { User } from './entities';
 
@@ -32,10 +33,12 @@ export class UsersService {
         const user = await this.findUserByIdOrUsername({ id: payload.userId });
 
         if (!user) {
-            throw new UnauthorizedException('User not found');
+            socket.emit('error', 'User Not Found');
+
+            throw new UnauthorizedException('User Not Found');
         }
 
-        return user.toResponseDto();
+        return new PlayerDto({ ...user, status: PlayerStatus.WAITING });
     }
 
     async findUserByIdOrUsername({ id, username }: { id?: string; username?: string }) {
