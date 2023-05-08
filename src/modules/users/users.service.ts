@@ -38,7 +38,7 @@ export class UsersService {
             throw new UnauthorizedException('User Not Found');
         }
 
-        return new PlayerDto({ ...user, status: PlayerStatus.WAITING });
+        return new PlayerDto({ ...user, status: PlayerStatus.WAITING, points: [], total: 0 });
     }
 
     async findUserByIdOrUsername({ id, username }: { id?: string; username?: string }) {

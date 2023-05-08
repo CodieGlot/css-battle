@@ -1,8 +1,9 @@
-import { Column, Entity } from 'typeorm';
+import { Column, Entity, JoinTable, ManyToMany } from 'typeorm';
 
 import { AbstractEntity } from '../../../common/abstract.entity';
 import { RoomStatus } from '../../../constants';
 import { UseDto } from '../../../decorators';
+import { Question } from '../../questions/entities';
 import type { PlayerDto } from '../dto/response';
 import { RoomDto } from '../dto/response';
 
@@ -12,7 +13,7 @@ export class Room extends AbstractEntity<RoomDto> {
     @Column({ type: 'enum', enum: RoomStatus, default: RoomStatus.OPEN })
     status: RoomStatus;
 
-    @Column('simple-json', {
+    @Column('jsonb', {
         transformer: {
             to(value: PlayerDto[]): string {
                 return JSON.stringify(value);
@@ -26,4 +27,8 @@ export class Room extends AbstractEntity<RoomDto> {
 
     @Column()
     roomCode: string;
+
+    @ManyToMany(() => Question, { cascade: true })
+    @JoinTable()
+    questions: Question[];
 }

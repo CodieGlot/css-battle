@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { ResponseDto } from '../../common/dto';
+import type { QuestionDifficulty } from '../../constants';
 import type { CreateQuestionsDto, NewQuestionDto, UpdateQuestionDto } from './dto/request';
 import { Question } from './entities';
 
@@ -62,5 +63,19 @@ export class QuestionsService {
         await this.questionRepository.delete(id);
 
         return new ResponseDto({ message: 'Delete question succesfully' });
+    }
+
+    async getRandomQuestions(number: number, difficulty?: QuestionDifficulty) {
+        if (!number || number === 0) {
+            return [];
+        }
+
+        const queryBuilder = this.questionRepository.createQueryBuilder('question');
+
+        if (difficulty) {
+            queryBuilder.where('question.difficulty = :difficulty', { difficulty });
+        }
+
+        return queryBuilder.orderBy('RANDOM()').limit(number).getMany();
     }
 }

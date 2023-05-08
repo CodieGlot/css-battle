@@ -9,7 +9,7 @@ import {
 import { Server, Socket } from 'socket.io';
 
 import { WsJwtGuard } from '../../guards';
-import { RoomCodeDto, UpdateStatusDto } from './dto/request';
+import { QuestionQuantitiesDto, RoomCodeDto, SubmitWorkDto, UpdateStatusDto } from './dto/request';
 import { RoomService } from './room.service';
 
 @WebSocketGateway({
@@ -48,5 +48,23 @@ export class RoomGateway {
     @SubscribeMessage('updateStatus')
     async updateStatus(@ConnectedSocket() socket: Socket, @MessageBody() updateStatusDto: UpdateStatusDto) {
         return this.roomService.updateStatus(socket, updateStatusDto);
+    }
+
+    @SubscribeMessage('startGame')
+    async startGame(
+        @ConnectedSocket() socket: Socket,
+        @MessageBody() questionQuantitiesDto: QuestionQuantitiesDto
+    ) {
+        return this.roomService.startGame(socket, questionQuantitiesDto);
+    }
+
+    @SubscribeMessage('submitWork')
+    async submitWork(@ConnectedSocket() socket: Socket, @MessageBody() submitWorkDto: SubmitWorkDto) {
+        return this.roomService.submitWork(socket, submitWorkDto);
+    }
+
+    @SubscribeMessage('finishGame')
+    async finishGame(@ConnectedSocket() socket: Socket, @MessageBody() roomCodeDto: RoomCodeDto) {
+        return this.roomService.finishGame(socket, roomCodeDto);
     }
 }

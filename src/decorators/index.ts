@@ -1,5 +1,6 @@
 export * from './api-body.decorator';
 export * from './api-page-ok-response.decorator';
+export * from './array-image-files.decorator';
 export * from './auth-user.decorator';
 export * from './field.decorator';
 export * from './geo-ip.decorator';

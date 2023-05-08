@@ -4,9 +4,11 @@ import type { WsResponse } from '@nestjs/websockets';
 import type { Socket } from 'socket.io';
 import { Repository } from 'typeorm';
 
-import { PlayerStatus, RoomStatus } from '../../constants';
+import { PlayerStatus, QuestionDifficulty, RoomStatus } from '../../constants';
+import type { Question } from '../questions/entities';
+import { QuestionsService } from '../questions/questions.service';
 import { UsersService } from '../users/users.service';
-import type { RoomCodeDto, UpdateStatusDto } from './dto/request';
+import type { QuestionQuantitiesDto, RoomCodeDto, SubmitWorkDto, UpdateStatusDto } from './dto/request';
 import type { PlayerDto } from './dto/response';
 import { Room } from './entities';
 
@@ -14,7 +16,8 @@ import { Room } from './entities';
 export class RoomService {
     constructor(
         @InjectRepository(Room) private readonly roomRepository: Repository<Room>,
-        private readonly usersService: UsersService
+        private readonly usersService: UsersService,
+        private readonly questionsService: QuestionsService
     ) {}
 
     activeRooms: Set<string> = new Set();
@@ -46,18 +49,16 @@ export class RoomService {
     async joinRoom(socket: Socket, dto: RoomCodeDto): Promise<WsResponse<unknown>> {
         const roomCode = dto.roomCode;
 
-        const user = await this.usersService.getUserFromSocket(socket);
+        const { user, room } = await this.getUserRoomUserIndex(socket, roomCode, false, false);
 
-        const room = await this.findActiveRoomByCode(roomCode);
-
-        if (!room) {
-            socket.emit('error', 'Room not found');
-
-            throw new BadRequestException('Room not found');
-        } else if (room.status === RoomStatus.PROGRESS) {
+        if (room.status === RoomStatus.PROGRESS) {
             socket.emit('error', 'Room has already been in progress');
 
             throw new BadRequestException('Room has already been in progress');
+        } else if (room.participants.length === 10) {
+            socket.emit('error', 'Room has been full');
+
+            throw new BadRequestException('Room has been full');
         }
 
         room.participants = [...room.participants, user];
@@ -78,23 +79,7 @@ export class RoomService {
     async leaveRoom(socket: Socket, dto: RoomCodeDto): Promise<WsResponse<unknown>> {
         const roomCode = dto.roomCode;
 
-        const user = await this.usersService.getUserFromSocket(socket);
-
-        const room = await this.findActiveRoomByCode(roomCode);
-
-        if (!room) {
-            socket.emit('error', 'Room not found');
-
-            throw new BadRequestException('Room not found');
-        }
-
-        const userIndex = this.findIndexOfParticipant(user.id, room.participants);
-
-        if (userIndex === -1) {
-            socket.emit('error', 'User is not in this room');
-
-            throw new BadRequestException('User is not in this room');
-        }
+        const { user, room, userIndex } = await this.getUserRoomUserIndex(socket, roomCode);
 
         if (room.participants.length === 1) {
             this.activeRooms.delete(roomCode);
@@ -119,33 +104,7 @@ export class RoomService {
     async updateStatus(socket: Socket, dto: UpdateStatusDto): Promise<WsResponse<unknown>> {
         const roomCode = dto.roomCode;
 
-        const user = await this.usersService.getUserFromSocket(socket);
-
-        const room = await this.findActiveRoomByCode(roomCode);
-
-        if (!room) {
-            socket.emit('error', 'Room not found');
-
-            throw new BadRequestException('Room not found');
-        }
-
-        const userIndex = this.findIndexOfParticipant(user.id, room.participants);
-
-        if (userIndex === -1) {
-            throw new BadRequestException('User is not in this room');
-        } else if (userIndex === 0 && dto.status === PlayerStatus.READY) {
-            if (room.participants.slice(1).every((player) => player.status === PlayerStatus.READY)) {
-                room.participants[userIndex].status = PlayerStatus.READY;
-
-                await this.roomRepository.update({ id: room.id }, { participants: room.participants });
-
-                // ADD GET QUESTIONS AND START GAME
-
-                return { event: 'startGame', data: {} };
-            }
-
-            return { event: 'error', data: { room, message: 'Participants have not been in ready state' } };
-        }
+        const { user, room, userIndex } = await this.getUserRoomUserIndex(socket, roomCode);
 
         let message: string;
 
@@ -182,9 +141,175 @@ export class RoomService {
         };
     }
 
+    async startGame(socket: Socket, dto: QuestionQuantitiesDto): Promise<WsResponse<unknown>> {
+        const total = dto.numOfEasy + dto.numOfMedium + dto.numOfHard;
+
+        if (total > 10) {
+            throw new BadRequestException('Total number of questions should not be more than 10');
+        } else if (total === 0) {
+            throw new BadRequestException('There should be at least 1 question to start');
+        }
+
+        const roomCode = dto.roomCode;
+
+        const { room, userIndex } = await this.getUserRoomUserIndex(socket, roomCode);
+
+        if (userIndex === 0) {
+            if (room.participants.length === 1) {
+                socket.emit('error', 'Find one more player to start game');
+
+                throw new BadRequestException('Not enough players to start');
+            }
+
+            const easyQuestions = await this.questionsService.getRandomQuestions(
+                dto.numOfEasy,
+                QuestionDifficulty.EASY
+            );
+
+            const mediumQuestions = await this.questionsService.getRandomQuestions(
+                dto.numOfMedium,
+                QuestionDifficulty.MEDIUM
+            );
+
+            const hardQuestions = await this.questionsService.getRandomQuestions(
+                dto.numOfHard,
+                QuestionDifficulty.HARD
+            );
+
+            room.questions = [...easyQuestions, ...mediumQuestions, ...hardQuestions];
+
+            for (let i = 0; i !== room.participants.length; i++) {
+                room.participants[i].points = Array.from({ length: room.questions.length }).map(() => 0);
+            }
+
+            room.status = RoomStatus.PROGRESS;
+
+            await this.roomRepository.save(room);
+
+            socket.to(roomCode).emit('startGame', {
+                room,
+                message: 'Questions have been generated successfully'
+            });
+
+            return {
+                event: 'startGame',
+                data: { room, message: 'Questions have been generated successfully' }
+            };
+        }
+
+        socket.emit('error', 'User is not the host of this room');
+
+        throw new BadRequestException('User is not the host of this room');
+    }
+
+    async submitWork(socket: Socket, dto: SubmitWorkDto): Promise<WsResponse<unknown>> {
+        const roomCode = dto.roomCode;
+
+        const { user, room, userIndex } = await this.getUserRoomUserIndex(socket, roomCode, true);
+
+        const questionIndex = this.findIndexOfQuestion(dto.questionId, room.questions);
+
+        if (questionIndex === -1) {
+            socket.emit('error', 'Question ID invalid');
+
+            throw new BadRequestException('Question ID invalid');
+        }
+
+        const currentPoint = room.participants[userIndex].points[questionIndex];
+
+        if (dto.point > currentPoint) {
+            room.participants[userIndex].points[questionIndex] = dto.point;
+
+            room.participants[userIndex].total += dto.point - currentPoint;
+        } else {
+            throw new BadRequestException('Player has earned less points than previous submit');
+        }
+
+        await this.roomRepository.save(room);
+
+        socket
+            .to(roomCode)
+            .emit('roomUpdated', { room, message: `Player ${user.username} has earned more points` });
+
+        return {
+            event: 'roomUpdated',
+            data: { room, message: `Player ${user.username} has earned more points` }
+        };
+    }
+
+    async finishGame(socket: Socket, dto: RoomCodeDto): Promise<WsResponse<unknown>> {
+        const roomCode = dto.roomCode;
+
+        const { user, room, userIndex } = await this.getUserRoomUserIndex(socket, roomCode, true);
+
+        room.participants[userIndex].status = PlayerStatus.FINISHED;
+
+        if (room.participants.every((player) => player.status === PlayerStatus.FINISHED)) {
+            room.status = RoomStatus.CLOSED;
+            await this.roomRepository.save(room);
+
+            socket.to(roomCode).emit('roomUpdated', { room, message: 'All players have finished the game' });
+
+            return { event: 'roomUpdated', data: { room, message: 'All players have finished the game' } };
+        }
+
+        await this.roomRepository.save(room);
+        socket
+            .to(roomCode)
+            .emit('roomUpdated', { room, message: `Player ${user.username} has finished the game` });
+
+        return {
+            event: 'roomUpdated',
+            data: { room, message: `Player ${user.username} has finished the game` }
+        };
+    }
+
+    async getUserRoomUserIndex(socket: Socket, roomCode: string, getQuestions = false, getIndex = true) {
+        const user = await this.usersService.getUserFromSocket(socket);
+
+        const room = await (getQuestions
+            ? this.roomRepository.findOne({
+                  relations: {
+                      questions: true
+                  },
+                  where: { roomCode }
+              })
+            : this.findActiveRoomByCode(roomCode));
+
+        if (!room) {
+            socket.emit('error', 'Room not found');
+
+            throw new BadRequestException('Room not found');
+        }
+
+        let userIndex = -1;
+
+        if (getIndex) {
+            userIndex = this.findIndexOfParticipant(user.id, room.participants);
+
+            if (userIndex === -1) {
+                socket.emit('error', 'User is not in this room');
+
+                throw new BadRequestException('User is not in this room');
+            }
+        }
+
+        return { user, room, userIndex };
+    }
+
     findIndexOfParticipant(id: string, participants: PlayerDto[]) {
         for (let i = 0; i !== participants.length; i++) {
             if (id === participants[i].id) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    findIndexOfQuestion(id: string, questions: Question[]) {
+        for (let i = 0; i !== questions.length; i++) {
+            if (id === questions[i].id) {
                 return i;
             }
         }
