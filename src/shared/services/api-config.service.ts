@@ -99,6 +99,13 @@ export class ApiConfigService {
         };
     }
 
+    get ablyConfig() {
+        return {
+            rootKey: this.getString('ABLY_ROOT_KEY'),
+            clientKey: this.getString('ABLY_CLIENT_KEY')
+        };
+    }
+
     get serverConfig() {
         return {
             port: this.configService.get<string>('PORT') || 4000

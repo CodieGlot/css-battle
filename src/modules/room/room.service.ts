@@ -1,15 +1,17 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { WsResponse } from '@nestjs/websockets';
-import type { Socket } from 'socket.io';
+import type Ably from 'ably';
 import { Repository } from 'typeorm';
 
 import { PlayerStatus, QuestionDifficulty, RoomStatus } from '../../constants';
+import { ApiConfigService } from '../../shared/services/api-config.service';
 import type { Question } from '../questions/entities';
 import { QuestionsService } from '../questions/questions.service';
+import type { User } from '../users/entities';
 import { UsersService } from '../users/users.service';
-import type { QuestionQuantitiesDto, RoomCodeDto, SubmitWorkDto, UpdateStatusDto } from './dto/request';
-import type { PlayerDto } from './dto/response';
+import type { QuestionQuantitiesDto, SubmitWorkDto, UpdateStatusDto } from './dto/request';
+import { PlayerDto } from './dto/response';
 import { Room } from './entities';
 
 @Injectable()
@@ -17,13 +19,14 @@ export class RoomService {
     constructor(
         @InjectRepository(Room) private readonly roomRepository: Repository<Room>,
         private readonly usersService: UsersService,
-        private readonly questionsService: QuestionsService
+        private readonly questionsService: QuestionsService,
+        private readonly configService: ApiConfigService
     ) {}
 
     activeRooms: Set<string> = new Set();
 
-    async createRoom(socket: Socket): Promise<WsResponse<unknown>> {
-        const user = await this.usersService.getUserFromSocket(socket);
+    async createRoom(ably: Ably.Types.RealtimePromise, user: User): Promise<WsResponse<unknown>> {
+        const player = new PlayerDto({ ...user, status: PlayerStatus.WAITING, points: [], total: 0 });
 
         let roomCode: string;
 
@@ -32,54 +35,65 @@ export class RoomService {
         } while (this.activeRooms.has(roomCode));
 
         const roomEntity = this.roomRepository.create({
-            participants: [user],
+            participants: [player],
             roomCode
         });
 
         const room = await this.roomRepository.save(roomEntity);
 
-        await socket.join(roomCode);
-        socket.to(roomCode).emit('roomUpdated', { room, message: `Room ${roomCode} has been created` });
-
         this.activeRooms.add(roomCode);
 
-        return { event: 'roomUpdated', data: { room, message: `Room ${roomCode} has been created` } };
-    }
+        const channel = ably.channels.get(roomCode);
 
-    async joinRoom(socket: Socket, dto: RoomCodeDto): Promise<WsResponse<unknown>> {
-        const roomCode = dto.roomCode;
-
-        const { user, room } = await this.getUserRoomUserIndex(socket, roomCode, false, false);
-
-        if (room.status === RoomStatus.PROGRESS) {
-            socket.emit('error', 'Room has already been in progress');
-
-            throw new BadRequestException('Room has already been in progress');
-        } else if (room.participants.length === 10) {
-            socket.emit('error', 'Room has been full');
-
-            throw new BadRequestException('Room has been full');
-        }
-
-        room.participants = [...room.participants, user];
-
-        await this.roomRepository.update({ id: room.id }, { participants: room.participants });
-
-        await socket.join(roomCode);
-        socket
-            .to(roomCode)
-            .emit('roomUpdated', { room, message: `User ${user.username} has joined the room` });
+        await channel.publish('roomUpdated', { room, message: `Room ${roomCode} has been created` });
 
         return {
             event: 'roomUpdated',
-            data: { room, message: `User ${user.username} has joined the room` }
+            data: {
+                room,
+                message: `Room ${roomCode} has been created`
+            }
         };
     }
 
-    async leaveRoom(socket: Socket, dto: RoomCodeDto): Promise<WsResponse<unknown>> {
-        const roomCode = dto.roomCode;
+    async joinRoom(
+        ably: Ably.Types.RealtimePromise,
+        user: User,
+        roomCode: string
+    ): Promise<WsResponse<unknown>> {
+        const { player, room } = await this.getPLayerRoomPlayerIndex(user, roomCode, false, false);
 
-        const { user, room, userIndex } = await this.getUserRoomUserIndex(socket, roomCode);
+        const channel = ably.channels.get(roomCode);
+
+        if (room.status === RoomStatus.PROGRESS) {
+            throw new BadRequestException('Room has already been in progress');
+        } else if (room.participants.length === 10) {
+            throw new BadRequestException('Room has been full');
+        }
+
+        room.participants = [...room.participants, player];
+
+        await this.roomRepository.update({ id: room.id }, { participants: room.participants });
+
+        await channel.publish('roomUpdated', {
+            room,
+            message: `Player ${player.username} has joined the room`
+        });
+
+        return {
+            event: 'roomUpdated',
+            data: { room, message: `Player ${player.username} has joined the room` }
+        };
+    }
+
+    async leaveRoom(
+        ably: Ably.Types.RealtimePromise,
+        user: User,
+        roomCode: string
+    ): Promise<WsResponse<unknown>> {
+        const { player, room, playerIndex } = await this.getPLayerRoomPlayerIndex(user, roomCode);
+
+        const channel = ably.channels.get(roomCode);
 
         if (room.participants.length === 1) {
             this.activeRooms.delete(roomCode);
@@ -89,43 +103,52 @@ export class RoomService {
             return { event: 'roomUpdated', data: { message: `Room ${roomCode} has been deleted` } };
         }
 
-        room.participants.splice(userIndex, 1);
+        room.participants.splice(playerIndex, 1);
 
         await this.roomRepository.update({ id: room.id }, { participants: room.participants });
 
-        await socket.leave(roomCode);
-        socket
-            .to(roomCode)
-            .emit('roomUpdated', { room, message: `Player ${user.username} has left the room` });
+        await channel.publish('roomUpdated', {
+            room,
+            message: `Player ${player.username} has left the room`
+        });
 
-        return { event: 'roomUpdated', data: { room, message: `Player ${user.username} has left the room` } };
+        return {
+            event: 'roomUpdated',
+            data: { room, message: `Player ${player.username} has left the room` }
+        };
     }
 
-    async updateStatus(socket: Socket, dto: UpdateStatusDto): Promise<WsResponse<unknown>> {
+    async updateStatus(
+        ably: Ably.Types.RealtimePromise,
+        user: User,
+        dto: UpdateStatusDto
+    ): Promise<WsResponse<unknown>> {
         const roomCode = dto.roomCode;
 
-        const { user, room, userIndex } = await this.getUserRoomUserIndex(socket, roomCode);
+        const { player, room, playerIndex } = await this.getPLayerRoomPlayerIndex(user, roomCode);
+
+        const channel = ably.channels.get(roomCode);
 
         let message: string;
 
         switch (dto.status) {
             case PlayerStatus.READY: {
-                room.participants[userIndex].status = PlayerStatus.READY;
-                message = `Player ${user.username} readies to start`;
+                room.participants[playerIndex].status = PlayerStatus.READY;
+                message = `Player ${player.username} readies to start`;
 
                 break;
             }
 
             case PlayerStatus.WAITING: {
-                room.participants[userIndex].status = PlayerStatus.WAITING;
-                message = `Player ${user.username} has changed to waiting state`;
+                room.participants[playerIndex].status = PlayerStatus.WAITING;
+                message = `Player ${player.username} has changed to waiting state`;
 
                 break;
             }
 
             case PlayerStatus.FINISHED: {
-                room.participants[userIndex].status = PlayerStatus.FINISHED;
-                message = `Player ${user.username} has finished the game`;
+                room.participants[playerIndex].status = PlayerStatus.FINISHED;
+                message = `Player ${player.username} has finished the game`;
 
                 break;
             }
@@ -133,7 +156,7 @@ export class RoomService {
 
         await this.roomRepository.update({ id: room.id }, { participants: room.participants });
 
-        socket.to(roomCode).emit('roomUpdated', { room, message });
+        await channel.publish('roomUpdated', { room, message });
 
         return {
             event: 'roomUpdated',
@@ -141,7 +164,11 @@ export class RoomService {
         };
     }
 
-    async startGame(socket: Socket, dto: QuestionQuantitiesDto): Promise<WsResponse<unknown>> {
+    async startGame(
+        ably: Ably.Types.RealtimePromise,
+        user: User,
+        dto: QuestionQuantitiesDto
+    ): Promise<WsResponse<unknown>> {
         const total = dto.numOfEasy + dto.numOfMedium + dto.numOfHard;
 
         if (total > 10) {
@@ -152,12 +179,12 @@ export class RoomService {
 
         const roomCode = dto.roomCode;
 
-        const { room, userIndex } = await this.getUserRoomUserIndex(socket, roomCode);
+        const { room, playerIndex } = await this.getPLayerRoomPlayerIndex(user, roomCode);
 
-        if (userIndex === 0) {
+        const channel = ably.channels.get(roomCode);
+
+        if (playerIndex === 0) {
             if (room.participants.length === 1) {
-                socket.emit('error', 'Find one more player to start game');
-
                 throw new BadRequestException('Not enough players to start');
             }
 
@@ -186,86 +213,92 @@ export class RoomService {
 
             await this.roomRepository.save(room);
 
-            socket.to(roomCode).emit('startGame', {
+            await channel.publish('gameStarted', {
                 room,
                 message: 'Questions have been generated successfully'
             });
 
             return {
-                event: 'startGame',
+                event: 'gameStarted',
                 data: { room, message: 'Questions have been generated successfully' }
             };
         }
 
-        socket.emit('error', 'User is not the host of this room');
-
         throw new BadRequestException('User is not the host of this room');
     }
 
-    async submitWork(socket: Socket, dto: SubmitWorkDto): Promise<WsResponse<unknown>> {
+    async submitWork(
+        ably: Ably.Types.RealtimePromise,
+        user: User,
+        dto: SubmitWorkDto
+    ): Promise<WsResponse<unknown>> {
         const roomCode = dto.roomCode;
 
-        const { user, room, userIndex } = await this.getUserRoomUserIndex(socket, roomCode, true);
+        const { player, room, playerIndex } = await this.getPLayerRoomPlayerIndex(user, roomCode, true);
+
+        const channel = ably.channels.get(roomCode);
 
         const questionIndex = this.findIndexOfQuestion(dto.questionId, room.questions);
 
         if (questionIndex === -1) {
-            socket.emit('error', 'Question ID invalid');
-
             throw new BadRequestException('Question ID invalid');
         }
 
-        const currentPoint = room.participants[userIndex].points[questionIndex];
+        const currentPoint = room.participants[playerIndex].points[questionIndex];
 
         if (dto.point > currentPoint) {
-            room.participants[userIndex].points[questionIndex] = dto.point;
+            room.participants[playerIndex].points[questionIndex] = dto.point;
 
-            room.participants[userIndex].total += dto.point - currentPoint;
-        } else {
-            throw new BadRequestException('Player has earned less points than previous submit');
+            room.participants[playerIndex].total += dto.point - currentPoint;
         }
 
         await this.roomRepository.save(room);
 
-        socket
-            .to(roomCode)
-            .emit('roomUpdated', { room, message: `Player ${user.username} has earned more points` });
+        await channel.publish('progressUpdated', {
+            room,
+            message: `Player ${player.username} has submited work`
+        });
 
         return {
-            event: 'roomUpdated',
-            data: { room, message: `Player ${user.username} has earned more points` }
+            event: 'progressUpdated',
+            data: { room, message: `Player ${player.username} has submited work` }
         };
     }
 
-    async finishGame(socket: Socket, dto: RoomCodeDto): Promise<WsResponse<unknown>> {
-        const roomCode = dto.roomCode;
+    async finishGame(
+        ably: Ably.Types.RealtimePromise,
+        user: User,
+        roomCode: string
+    ): Promise<WsResponse<unknown>> {
+        const { player, room, playerIndex } = await this.getPLayerRoomPlayerIndex(user, roomCode, true);
 
-        const { user, room, userIndex } = await this.getUserRoomUserIndex(socket, roomCode, true);
+        const channel = ably.channels.get(roomCode);
 
-        room.participants[userIndex].status = PlayerStatus.FINISHED;
+        room.participants[playerIndex].status = PlayerStatus.FINISHED;
 
-        if (room.participants.every((player) => player.status === PlayerStatus.FINISHED)) {
+        if (room.participants.every((participant) => participant.status === PlayerStatus.FINISHED)) {
             room.status = RoomStatus.CLOSED;
             await this.roomRepository.save(room);
 
-            socket.to(roomCode).emit('roomUpdated', { room, message: 'All players have finished the game' });
+            await channel.publish('gameFinished', { room, message: 'All players have finished the game' });
 
-            return { event: 'roomUpdated', data: { room, message: 'All players have finished the game' } };
+            return { event: 'gameFinished', data: { room, message: 'All players have finished the game' } };
         }
 
         await this.roomRepository.save(room);
-        socket
-            .to(roomCode)
-            .emit('roomUpdated', { room, message: `Player ${user.username} has finished the game` });
+        await channel.publish('playerFinished', {
+            room,
+            message: `Player ${player.username} has finished the game`
+        });
 
         return {
-            event: 'roomUpdated',
-            data: { room, message: `Player ${user.username} has finished the game` }
+            event: 'playerFinished',
+            data: { room, message: `Player ${player.username} has finished the game` }
         };
     }
 
-    async getUserRoomUserIndex(socket: Socket, roomCode: string, getQuestions = false, getIndex = true) {
-        const user = await this.usersService.getUserFromSocket(socket);
+    async getPLayerRoomPlayerIndex(user: User, roomCode: string, getQuestions = false, getIndex = true) {
+        const player = new PlayerDto({ ...user, status: PlayerStatus.WAITING, points: [], total: 0 });
 
         const room = await (getQuestions
             ? this.roomRepository.findOne({
@@ -277,24 +310,20 @@ export class RoomService {
             : this.findActiveRoomByCode(roomCode));
 
         if (!room) {
-            socket.emit('error', 'Room not found');
-
             throw new BadRequestException('Room not found');
         }
 
-        let userIndex = -1;
+        let playerIndex = -1;
 
         if (getIndex) {
-            userIndex = this.findIndexOfParticipant(user.id, room.participants);
+            playerIndex = this.findIndexOfParticipant(player.id, room.participants);
 
-            if (userIndex === -1) {
-                socket.emit('error', 'User is not in this room');
-
+            if (playerIndex === -1) {
                 throw new BadRequestException('User is not in this room');
             }
         }
 
-        return { user, room, userIndex };
+        return { player, room, playerIndex };
     }
 
     findIndexOfParticipant(id: string, participants: PlayerDto[]) {
