@@ -268,10 +268,10 @@ export class RoomService {
 
             room.participants[playerIndex].total += dto.point - currentPoint;
 
-            message = `Player ${player.username} has earned more points in this question`;
+            message = `Player ${player.username} has earned more points to this question`;
+        } else {
+            message = `Player ${player.username} has submited work`;
         }
-
-        message = `Player ${player.username} has submited work`;
 
         await this.roomRepository.save(room);
 
