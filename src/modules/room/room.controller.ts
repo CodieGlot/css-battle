@@ -7,7 +7,7 @@ import { UserRole } from '../../constants';
 import { Auth, AuthUser } from '../../decorators';
 import { ApiConfigService } from '../../shared/services/api-config.service';
 import { User } from '../users/entities';
-import { QuestionQuantitiesDto, RoomCodeDto, SubmitWorkDto, UpdateStatusDto } from './dto/request';
+import { QuestionQuantitiesDto, SubmitWorkDto, UpdateStatusDto } from './dto/request';
 import { Room } from './entities';
 import { RoomService } from './room.service';
 
@@ -123,7 +123,7 @@ export class RoomController implements OnModuleInit {
         return this.roomService.submitWork(this.ably, user, roomCode, dto);
     }
 
-    @Post('finish')
+    @Post(':roomCode/finish')
     @Auth([UserRole.ADMIN, UserRole.USER])
     @HttpCode(HttpStatus.OK)
     @ApiOkResponse({
@@ -131,7 +131,7 @@ export class RoomController implements OnModuleInit {
         description: 'Finish game'
     })
     @ApiOperation({ summary: 'Finish Game' })
-    async finishGame(@AuthUser() user: User, @Body() dto: RoomCodeDto) {
-        return this.roomService.finishGame(this.ably, user, dto.roomCode);
+    async finishGame(@AuthUser() user: User, @Param('roomCode') roomCode: string) {
+        return this.roomService.finishGame(this.ably, user, roomCode);
     }
 }
