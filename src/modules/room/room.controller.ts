@@ -1,5 +1,5 @@
 import type { OnModuleInit } from '@nestjs/common';
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import Ably from 'ably';
 
@@ -37,7 +37,21 @@ export class RoomController implements OnModuleInit {
         return this.roomService.createRoom(this.ably, user);
     }
 
-    @Post('join')
+    @Get(':roomCode')
+    @Auth([UserRole.ADMIN, UserRole.USER])
+    @HttpCode(HttpStatus.OK)
+    @ApiOkResponse({
+        type: Room,
+        description: 'Get room with roomCode'
+    })
+    @ApiOperation({ summary: 'Get room with roomCode' })
+    async getRoom(@AuthUser() user: User, @Param() roomCode: string) {
+        const { room } = await this.roomService.getPLayerRoomPlayerIndex(user, roomCode, false, false);
+
+        return room;
+    }
+
+    @Post(':roomCode/join')
     @Auth([UserRole.ADMIN, UserRole.USER])
     @HttpCode(HttpStatus.OK)
     @ApiOkResponse({
@@ -45,11 +59,11 @@ export class RoomController implements OnModuleInit {
         description: 'PLayer has joined the room'
     })
     @ApiOperation({ summary: 'Join room with roomcode' })
-    async joinRoom(@AuthUser() user: User, @Body() dto: RoomCodeDto) {
-        return this.roomService.joinRoom(this.ably, user, dto.roomCode);
+    async joinRoom(@AuthUser() user: User, @Param('roomCode') roomCode: string) {
+        return this.roomService.joinRoom(this.ably, user, roomCode);
     }
 
-    @Post('leave')
+    @Post(':roomCode/leave')
     @Auth([UserRole.ADMIN, UserRole.USER])
     @HttpCode(HttpStatus.OK)
     @ApiOkResponse({
@@ -57,11 +71,11 @@ export class RoomController implements OnModuleInit {
         description: 'Player has left the room'
     })
     @ApiOperation({ summary: 'Leave room with roomcode' })
-    async leaveRoom(@AuthUser() user: User, @Body() dto: RoomCodeDto) {
-        return this.roomService.joinRoom(this.ably, user, dto.roomCode);
+    async leaveRoom(@AuthUser() user: User, @Param('roomCode') roomCode: string) {
+        return this.roomService.joinRoom(this.ably, user, roomCode);
     }
 
-    @Post('update-status')
+    @Post(':roomCode/update-status')
     @Auth([UserRole.ADMIN, UserRole.USER])
     @HttpCode(HttpStatus.OK)
     @ApiOkResponse({
@@ -69,11 +83,15 @@ export class RoomController implements OnModuleInit {
         description: 'Play has updated his/her status'
     })
     @ApiOperation({ summary: "Update player's status" })
-    async updateStatus(@AuthUser() user: User, @Body() dto: UpdateStatusDto) {
-        return this.roomService.updateStatus(this.ably, user, dto);
+    async updateStatus(
+        @AuthUser() user: User,
+        @Param('roomCode') roomCode: string,
+        @Body() dto: UpdateStatusDto
+    ) {
+        return this.roomService.updateStatus(this.ably, user, roomCode, dto.status);
     }
 
-    @Post('start')
+    @Post(':roomCode/start')
     @Auth([UserRole.ADMIN, UserRole.USER])
     @HttpCode(HttpStatus.OK)
     @ApiOkResponse({
@@ -81,11 +99,15 @@ export class RoomController implements OnModuleInit {
         description: 'Start game'
     })
     @ApiOperation({ summary: 'Start game' })
-    async startGame(@AuthUser() user: User, @Body() dto: QuestionQuantitiesDto) {
-        return this.roomService.startGame(this.ably, user, dto);
+    async startGame(
+        @AuthUser() user: User,
+        @Param('roomCode') roomCode: string,
+        @Body() dto: QuestionQuantitiesDto
+    ) {
+        return this.roomService.startGame(this.ably, user, roomCode, dto);
     }
 
-    @Post('submit')
+    @Post(':roomCode/submit')
     @Auth([UserRole.ADMIN, UserRole.USER])
     @HttpCode(HttpStatus.OK)
     @ApiOkResponse({
@@ -93,8 +115,12 @@ export class RoomController implements OnModuleInit {
         description: 'Submit work'
     })
     @ApiOperation({ summary: 'Submit work' })
-    async submitWork(@AuthUser() user: User, @Body() dto: SubmitWorkDto) {
-        return this.roomService.submitWork(this.ably, user, dto);
+    async submitWork(
+        @AuthUser() user: User,
+        @Param('roomCode') roomCode: string,
+        @Body() dto: SubmitWorkDto
+    ) {
+        return this.roomService.submitWork(this.ably, user, roomCode, dto);
     }
 
     @Post('finish')

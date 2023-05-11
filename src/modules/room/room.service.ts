@@ -10,8 +10,9 @@ import type { Question } from '../questions/entities';
 import { QuestionsService } from '../questions/questions.service';
 import type { User } from '../users/entities';
 import { UsersService } from '../users/users.service';
-import type { QuestionQuantitiesDto, SubmitWorkDto, UpdateStatusDto } from './dto/request';
+import type { QuestionQuantitiesDto, SubmitWorkDto } from './dto/request';
 import { PlayerDto } from './dto/response';
+import { PointInfoDto } from './dto/response/point-info.dto';
 import { Room } from './entities';
 
 @Injectable()
@@ -63,11 +64,17 @@ export class RoomService {
     ): Promise<WsResponse<unknown>> {
         const { player, room } = await this.getPLayerRoomPlayerIndex(user, roomCode, false, false);
 
+        const playerIndex = this.findIndexOfParticipant(player.id, room.participants);
+
+        if (playerIndex !== -1) {
+            throw new BadRequestException('User has already been in this room');
+        }
+
         const channel = ably.channels.get(roomCode);
 
         if (room.status === RoomStatus.PROGRESS) {
             throw new BadRequestException('Room has already been in progress');
-        } else if (room.participants.length === 10) {
+        } else if (room.participants.length === 5) {
             throw new BadRequestException('Room has been full');
         }
 
@@ -121,17 +128,16 @@ export class RoomService {
     async updateStatus(
         ably: Ably.Types.RealtimePromise,
         user: User,
-        dto: UpdateStatusDto
+        roomCode: string,
+        status: PlayerStatus
     ): Promise<WsResponse<unknown>> {
-        const roomCode = dto.roomCode;
-
         const { player, room, playerIndex } = await this.getPLayerRoomPlayerIndex(user, roomCode);
 
         const channel = ably.channels.get(roomCode);
 
         let message: string;
 
-        switch (dto.status) {
+        switch (status) {
             case PlayerStatus.READY: {
                 room.participants[playerIndex].status = PlayerStatus.READY;
                 message = `Player ${player.username} readies to start`;
@@ -167,6 +173,7 @@ export class RoomService {
     async startGame(
         ably: Ably.Types.RealtimePromise,
         user: User,
+        roomCode: string,
         dto: QuestionQuantitiesDto
     ): Promise<WsResponse<unknown>> {
         const total = dto.numOfEasy + dto.numOfMedium + dto.numOfHard;
@@ -177,8 +184,6 @@ export class RoomService {
             throw new BadRequestException('There should be at least 1 question to start');
         }
 
-        const roomCode = dto.roomCode;
-
         const { room, playerIndex } = await this.getPLayerRoomPlayerIndex(user, roomCode);
 
         const channel = ably.channels.get(roomCode);
@@ -186,6 +191,10 @@ export class RoomService {
         if (playerIndex === 0) {
             if (room.participants.length === 1) {
                 throw new BadRequestException('Not enough players to start');
+            }
+
+            if (!room.participants.every((participant) => participant.status === PlayerStatus.READY)) {
+                throw new BadRequestException('All players have not ready to start');
             }
 
             const easyQuestions = await this.questionsService.getRandomQuestions(
@@ -206,7 +215,13 @@ export class RoomService {
             room.questions = [...easyQuestions, ...mediumQuestions, ...hardQuestions];
 
             for (let i = 0; i !== room.participants.length; i++) {
-                room.participants[i].points = Array.from({ length: room.questions.length }).map(() => 0);
+                room.participants[i].points = Array.from({ length: room.questions.length }).map(
+                    () =>
+                        new PointInfoDto({
+                            point: 0,
+                            time: 0
+                        })
+                );
             }
 
             room.status = RoomStatus.PROGRESS;
@@ -230,10 +245,9 @@ export class RoomService {
     async submitWork(
         ably: Ably.Types.RealtimePromise,
         user: User,
+        roomCode: string,
         dto: SubmitWorkDto
     ): Promise<WsResponse<unknown>> {
-        const roomCode = dto.roomCode;
-
         const { player, room, playerIndex } = await this.getPLayerRoomPlayerIndex(user, roomCode, true);
 
         const channel = ably.channels.get(roomCode);
@@ -244,24 +258,31 @@ export class RoomService {
             throw new BadRequestException('Question ID invalid');
         }
 
-        const currentPoint = room.participants[playerIndex].points[questionIndex];
+        const currentPoint = room.participants[playerIndex].points[questionIndex].point;
+
+        let message: string;
 
         if (dto.point > currentPoint) {
-            room.participants[playerIndex].points[questionIndex] = dto.point;
+            room.participants[playerIndex].points[questionIndex].point = dto.point;
+            room.participants[playerIndex].points[questionIndex].time = dto.time;
 
             room.participants[playerIndex].total += dto.point - currentPoint;
+
+            message = `Player ${player.username} has earned more points in this question`;
         }
+
+        message = `Player ${player.username} has submited work`;
 
         await this.roomRepository.save(room);
 
         await channel.publish('progressUpdated', {
             room,
-            message: `Player ${player.username} has submited work`
+            message
         });
 
         return {
             event: 'progressUpdated',
-            data: { room, message: `Player ${player.username} has submited work` }
+            data: { room, message }
         };
     }
 

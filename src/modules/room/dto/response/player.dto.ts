@@ -1,4 +1,5 @@
 import type { PlayerStatus, UserRole } from '../../../../constants';
+import type { PointInfoDto } from './point-info.dto';
 
 export class PlayerDto {
     id: string;
@@ -11,7 +12,7 @@ export class PlayerDto {
 
     status: PlayerStatus;
 
-    points: number[];
+    points: PointInfoDto[];
 
     total: number;
 

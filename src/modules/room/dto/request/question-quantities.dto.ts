@@ -1,9 +1,6 @@
-import { NumberField, StringField } from '../../../../decorators';
+import { NumberField } from '../../../../decorators';
 
 export class QuestionQuantitiesDto {
-    @StringField({ minLength: 6, maxLength: 6 })
-    roomCode: string;
-
     @NumberField({ int: true, minimum: 0 })
     numOfEasy: number;
 
