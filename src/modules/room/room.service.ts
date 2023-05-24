@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { WsResponse } from '@nestjs/websockets';
@@ -275,14 +276,16 @@ export class RoomService {
 
         await this.roomRepository.save(room);
 
+        const leaderboard = this.createLeaderBoard(room.participants);
+
         await channel.publish('progressUpdated', {
-            room,
+            leaderboard,
             message
         });
 
         return {
             event: 'progressUpdated',
-            data: { room, message }
+            data: { leaderboard, message }
         };
     }
 
@@ -307,15 +310,38 @@ export class RoomService {
         }
 
         await this.roomRepository.save(room);
+
+        const leaderboard = this.createLeaderBoard(room.participants);
+
         await channel.publish('playerFinished', {
-            room,
+            leaderboard,
             message: `Player ${player.username} has finished the game`
         });
 
         return {
             event: 'playerFinished',
-            data: { room, message: `Player ${player.username} has finished the game` }
+            data: { leaderboard, message: `Player ${player.username} has finished the game` }
         };
+    }
+
+    createLeaderBoard(participants: PlayerDto[]) {
+        const leaderboard: any[] = [];
+
+        for (let i = 0; i !== participants[0].points.length; i++) {
+            const rank: any[] = [];
+
+            for (const participant of participants) {
+                rank.push({
+                    username: participant.username,
+                    point: participant.points[i]
+                });
+            }
+
+            rank.sort((a, b) => a.point - b.point);
+            leaderboard.push(rank);
+        }
+
+        return leaderboard;
     }
 
     async getPLayerRoomPlayerIndex(user: User, roomCode: string, getQuestions = false, getIndex = true) {
