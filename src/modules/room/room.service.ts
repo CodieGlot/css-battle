@@ -190,10 +190,6 @@ export class RoomService {
         const channel = ably.channels.get(roomCode);
 
         if (playerIndex === 0) {
-            if (room.participants.length === 1) {
-                throw new BadRequestException('Not enough players to start');
-            }
-
             if (!room.participants.every((participant) => participant.status === PlayerStatus.READY)) {
                 throw new BadRequestException('All players have not ready to start');
             }
@@ -300,27 +296,32 @@ export class RoomService {
 
         room.participants[playerIndex].status = PlayerStatus.FINISHED;
 
+        const summary = this.createSummaryBoard(room.participants);
+
+        const rank = this.findRankOfSummary(summary, player.username);
+
         if (room.participants.every((participant) => participant.status === PlayerStatus.FINISHED)) {
             room.status = RoomStatus.CLOSED;
             await this.roomRepository.save(room);
 
-            await channel.publish('gameFinished', { room, message: 'All players have finished the game' });
+            await channel.publish('gameFinished', { summary, message: 'All players have finished the game' });
 
-            return { event: 'gameFinished', data: { room, message: 'All players have finished the game' } };
+            return {
+                event: 'gameFinished',
+                data: { summary, message: 'All players have finished the game' }
+            };
         }
 
         await this.roomRepository.save(room);
 
-        const leaderboard = this.createLeaderBoard(room.participants);
-
         await channel.publish('playerFinished', {
-            leaderboard,
-            message: `Player ${player.username} has finished the game`
+            summary,
+            message: `Player ${player.username} finished at rank ${rank}`
         });
 
         return {
             event: 'playerFinished',
-            data: { leaderboard, message: `Player ${player.username} has finished the game` }
+            data: { summary, message: `Player ${player.username} finished at rank ${rank}` }
         };
     }
 
@@ -343,6 +344,42 @@ export class RoomService {
         }
 
         return leaderboard;
+    }
+
+    createSummaryBoard(participants: PlayerDto[]) {
+        const summary: any[] = [];
+
+        for (const participant of participants) {
+            if (participant.status === PlayerStatus.FINISHED) {
+                let totalPoints = 0,
+                    totalTime = 0;
+
+                for (const points of participant.points) {
+                    totalPoints += points.point;
+                    totalTime += points.time;
+                }
+
+                summary.push({
+                    username: participant.username,
+                    totalPoints,
+                    totalTime
+                });
+            }
+        }
+
+        summary.sort((a, b) => (a.point === b.point ? a.time - b.time : b.point - a.point));
+
+        return summary;
+    }
+
+    findRankOfSummary(summary: any[], username: string) {
+        for (let i = 0; i !== summary.length; i++) {
+            if (summary[i].username === username) {
+                return i + 1;
+            }
+        }
+
+        return 0;
     }
 
     async getPLayerRoomPlayerIndex(user: User, roomCode: string, getQuestions = false, getIndex = true) {
