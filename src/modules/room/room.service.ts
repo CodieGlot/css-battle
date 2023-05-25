@@ -333,8 +333,8 @@ export class RoomService {
             for (const participant of participants) {
                 rank.push({
                     username: participant.username,
-                    point: participant.points[i][0],
-                    time: participant.points[i][1]
+                    point: participant.points[i].point,
+                    time: participant.points[i].time
                 });
             }
 
