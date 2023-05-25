@@ -333,11 +333,12 @@ export class RoomService {
             for (const participant of participants) {
                 rank.push({
                     username: participant.username,
-                    point: participant.points[i]
+                    point: participant.points[i][0],
+                    time: participant.points[i][1]
                 });
             }
 
-            rank.sort((a, b) => a.point - b.point);
+            rank.sort((a, b) => (a.point === b.point ? a.time - b.time : b.point - a.point));
             leaderboard.push(rank);
         }
 
