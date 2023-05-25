@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Auth } from 'googleapis';
 
@@ -47,13 +47,13 @@ export class AuthService {
         const user = await this.usersService.findUserByIdOrUsername({ username: dto.username });
 
         if (!user) {
-            throw new NotFoundException();
+            throw new UnauthorizedException('Username or password is not valid');
         }
 
         const isPasswordValid = await validateHash(dto.password, user.password);
 
         if (!isPasswordValid) {
-            throw new UnauthorizedException();
+            throw new UnauthorizedException('Username or password is not valid');
         }
 
         return user;
