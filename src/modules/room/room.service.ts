@@ -316,12 +316,12 @@ export class RoomService {
 
         await channel.publish('playerFinished', {
             summary,
-            message: `Player ${player.username} finished at rank ${rank}`
+            message: `Player ${player.username} currently ranked ${rank} in the game`
         });
 
         return {
             event: 'playerFinished',
-            data: { summary, message: `Player ${player.username} finished at rank ${rank}` }
+            data: { summary, message: `Player ${player.username} currently ranked ${rank} in the game` }
         };
     }
 
@@ -350,21 +350,18 @@ export class RoomService {
         const summary: any[] = [];
 
         for (const participant of participants) {
-            if (participant.status === PlayerStatus.FINISHED) {
-                let totalPoints = 0,
-                    totalTime = 0;
+            let totalTime = 0;
 
-                for (const points of participant.points) {
-                    totalPoints += points.point;
-                    totalTime += points.time;
-                }
-
-                summary.push({
-                    username: participant.username,
-                    totalPoints,
-                    totalTime
-                });
+            for (const points of participant.points) {
+                totalTime += points.time;
             }
+
+            summary.push({
+                username: participant.username,
+                status: participant.status,
+                totalPoints: participant.total,
+                totalTime
+            });
         }
 
         summary.sort((a, b) => (a.point === b.point ? a.time - b.time : b.point - a.point));
@@ -373,13 +370,17 @@ export class RoomService {
     }
 
     findRankOfSummary(summary: any[], username: string) {
+        let rank = 0;
+
         for (let i = 0; i !== summary.length; i++) {
             if (summary[i].username === username) {
-                return i + 1;
+                rank = i + 1;
+                break;
             }
         }
 
-        return 0;
+        // eslint-disable-next-line unicorn/no-nested-ternary
+        return rank === 1 ? '1st' : rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`;
     }
 
     async getPLayerRoomPlayerIndex(user: User, roomCode: string, getQuestions = false, getIndex = true) {
