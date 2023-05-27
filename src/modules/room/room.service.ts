@@ -355,17 +355,17 @@ export class RoomService {
         const summary: any[] = [];
 
         for (const participant of participants) {
-            let totalTime = 0;
+            let time = 0;
 
             for (const points of participant.points) {
-                totalTime += points.time;
+                time += points.time;
             }
 
             summary.push({
                 username: participant.username,
                 status: participant.status,
-                totalPoints: participant.total,
-                totalTime
+                point: participant.total,
+                time
             });
         }
 
