@@ -284,14 +284,14 @@ export class RoomService {
                 // NOTE: FIX HERE TO SAVE MATCH RESULT
                 await this.roomRepository.delete({ id: room.id });
 
-                await channel.publish('gameFinished', {
+                await channel.publish('playerFinished', {
                     leaderboard,
                     summary,
                     message: 'All players have finished the game'
                 });
 
                 return {
-                    event: 'gameFinished',
+                    event: 'playerFinished',
                     data: { leaderboard, summary, message: 'All players have finished the game' }
                 };
             }
@@ -407,7 +407,7 @@ export class RoomService {
         let playerIndex = -1;
 
         if (getIndex) {
-            playerIndex = this.findIndexOfParticipant(player.id, room.participants);
+            playerIndex = this.findIndexOfParticipant(player.username, room.participants);
 
             if (playerIndex === -1) {
                 throw new BadRequestException('User is not in this room');
@@ -417,9 +417,9 @@ export class RoomService {
         return { player, room, playerIndex };
     }
 
-    findIndexOfParticipant(id: string, participants: PlayerDto[]) {
+    findIndexOfParticipant(username: string, participants: PlayerDto[]) {
         for (let i = 0; i !== participants.length; i++) {
-            if (id === participants[i].id) {
+            if (username === participants[i].username) {
                 return i;
             }
         }
