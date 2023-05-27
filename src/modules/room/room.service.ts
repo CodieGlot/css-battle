@@ -429,7 +429,7 @@ export class RoomService {
 
     findIndexOfQuestion(id: string, questions: Question[]) {
         for (let i = 0; i !== questions.length; i++) {
-            if (id === questions[i].id) {
+            if (id.localeCompare(questions[i].id) === 0) {
                 return i;
             }
         }
