@@ -255,73 +255,78 @@ export class RoomService {
             throw new BadRequestException('Question ID invalid');
         }
 
-        const currentPoint = room.participants[playerIndex].points[questionIndex].point;
+        const currentPoint = room.participants[playerIndex].points[questionIndex].point,
+            currentTime = room.participants[playerIndex].points[questionIndex].time;
 
-        let message: string;
-
-        if (dto.point > currentPoint) {
+        if (currentPoint === 0 && currentTime === 0) {
             room.participants[playerIndex].points[questionIndex].point = dto.point;
             room.participants[playerIndex].points[questionIndex].time = dto.time;
 
-            room.participants[playerIndex].total += dto.point - currentPoint;
-
-            message = `Player ${player.username} has earned more points to this question`;
+            room.participants[playerIndex].total += dto.point;
         } else {
-            message = `Player ${player.username} has submited work`;
+            throw new BadRequestException('Player has already submitted this question');
         }
-
-        await this.roomRepository.save(room);
 
         const leaderboard = this.createLeaderBoard(room.participants);
 
-        await channel.publish('progressUpdated', {
-            leaderboard,
-            message
-        });
+        if (
+            room.participants[playerIndex].points.every((points) => points.point !== 0 || points.time !== 0)
+        ) {
+            room.participants[playerIndex].status = PlayerStatus.FINISHED;
 
-        return {
-            event: 'progressUpdated',
-            data: { leaderboard, message }
-        };
-    }
+            const summary = this.createSummaryBoard(room.participants);
 
-    async finishGame(
-        ably: Ably.Types.RealtimePromise,
-        user: User,
-        roomCode: string
-    ): Promise<WsResponse<unknown>> {
-        const { player, room, playerIndex } = await this.getPLayerRoomPlayerIndex(user, roomCode, true);
+            const rank = this.findRankOfSummary(summary, player.username);
 
-        const channel = ably.channels.get(roomCode);
+            if (room.participants.every((participant) => participant.status === PlayerStatus.FINISHED)) {
+                room.status = RoomStatus.CLOSED;
 
-        room.participants[playerIndex].status = PlayerStatus.FINISHED;
+                // NOTE: FIX HERE TO SAVE MATCH RESULT
+                await this.roomRepository.delete({ id: room.id });
 
-        const summary = this.createSummaryBoard(room.participants);
+                await channel.publish('gameFinished', {
+                    leaderboard,
+                    summary,
+                    message: 'All players have finished the game'
+                });
 
-        const rank = this.findRankOfSummary(summary, player.username);
+                return {
+                    event: 'gameFinished',
+                    data: { leaderboard, summary, message: 'All players have finished the game' }
+                };
+            }
 
-        if (room.participants.every((participant) => participant.status === PlayerStatus.FINISHED)) {
-            room.status = RoomStatus.CLOSED;
             await this.roomRepository.save(room);
 
-            await channel.publish('gameFinished', { summary, message: 'All players have finished the game' });
+            await channel.publish('playerFinished', {
+                leaderboard,
+                summary,
+                message: `Player ${player.username} currently ranked ${rank} in the game`
+            });
 
             return {
-                event: 'gameFinished',
-                data: { summary, message: 'All players have finished the game' }
+                event: 'playerFinished',
+                data: {
+                    leaderboard,
+                    summary,
+                    message: `Player ${player.username} currently ranked ${rank} in the game`
+                }
             };
         }
 
         await this.roomRepository.save(room);
 
-        await channel.publish('playerFinished', {
-            summary,
-            message: `Player ${player.username} currently ranked ${rank} in the game`
+        await channel.publish('progressUpdated', {
+            leaderboard,
+            message: `Player ${player.username} has earned ${dto.point} points to this question`
         });
 
         return {
-            event: 'playerFinished',
-            data: { summary, message: `Player ${player.username} currently ranked ${rank} in the game` }
+            event: 'progressUpdated',
+            data: {
+                leaderboard,
+                message: `Player ${player.username} has earned ${dto.point} points to this question`
+            }
         };
     }
 

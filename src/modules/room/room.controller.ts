@@ -122,16 +122,4 @@ export class RoomController implements OnModuleInit {
     ) {
         return this.roomService.submitWork(this.ably, user, roomCode, dto);
     }
-
-    @Post(':roomCode/finish')
-    @Auth([UserRole.ADMIN, UserRole.USER])
-    @HttpCode(HttpStatus.OK)
-    @ApiOkResponse({
-        type: Room,
-        description: 'Finish game'
-    })
-    @ApiOperation({ summary: 'Finish Game' })
-    async finishGame(@AuthUser() user: User, @Param('roomCode') roomCode: string) {
-        return this.roomService.finishGame(this.ably, user, roomCode);
-    }
 }
