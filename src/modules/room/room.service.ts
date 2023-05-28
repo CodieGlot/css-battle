@@ -7,7 +7,6 @@ import { Repository } from 'typeorm';
 
 import { PlayerStatus, QuestionDifficulty, RoomStatus } from '../../constants';
 import { ApiConfigService } from '../../shared/services/api-config.service';
-import type { Question } from '../questions/entities';
 import { QuestionsService } from '../questions/questions.service';
 import type { User } from '../users/entities';
 import { UsersService } from '../users/users.service';
@@ -212,9 +211,10 @@ export class RoomService {
             room.questions = [...easyQuestions, ...mediumQuestions, ...hardQuestions];
 
             for (let i = 0; i !== room.participants.length; i++) {
-                room.participants[i].points = Array.from({ length: room.questions.length }).map(
-                    () =>
+                room.participants[i].points = room.questions.map(
+                    (question) =>
                         new PointInfoDto({
+                            questionId: question.id,
                             point: 0,
                             time: 0
                         })
@@ -249,7 +249,7 @@ export class RoomService {
 
         const channel = ably.channels.get(roomCode);
 
-        const questionIndex = this.findIndexOfQuestion(dto.questionId, room.questions);
+        const questionIndex = this.findIndexOfQuestion(dto.questionId, room.participants[playerIndex].points);
 
         if (questionIndex === -1) {
             throw new BadRequestException('Question ID invalid');
@@ -427,9 +427,9 @@ export class RoomService {
         return -1;
     }
 
-    findIndexOfQuestion(id: string, questions: Question[]) {
-        for (let i = 0; i !== questions.length; i++) {
-            if (id.localeCompare(questions[i].id) === 0) {
+    findIndexOfQuestion(id: string, points: PointInfoDto[]) {
+        for (let i = 0; i !== points.length; i++) {
+            if (id === points[i].questionId) {
                 return i;
             }
         }
