@@ -318,14 +318,18 @@ export class RoomService {
 
         await channel.publish('progressUpdated', {
             leaderboard,
-            message: `Player ${player.username} has earned ${dto.point} points to this question`
+            message: `Player ${player.username} has earned ${dto.point} points to question ${
+                questionIndex + 1
+            }`
         });
 
         return {
             event: 'progressUpdated',
             data: {
                 leaderboard,
-                message: `Player ${player.username} has earned ${dto.point} points to this question`
+                message: `Player ${player.username} has earned ${dto.point} points to question ${
+                    questionIndex + 1
+                }`
             }
         };
     }
