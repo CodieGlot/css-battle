@@ -334,9 +334,20 @@ export class RoomService {
         const leaderboard: any[] = [];
 
         for (let i = 0; i !== participants[0].points.length; i++) {
-            const rank: any[] = [];
+            const rank: any[] = [],
+                unfinished: any[] = [];
 
             for (const participant of participants) {
+                if (participant.points[i].time === 0) {
+                    unfinished.push({
+                        username: participant.username,
+                        point: participant.points[i].point,
+                        time: participant.points[i].time
+                    });
+
+                    continue;
+                }
+
                 rank.push({
                     username: participant.username,
                     point: participant.points[i].point,
@@ -345,7 +356,7 @@ export class RoomService {
             }
 
             rank.sort((a, b) => (a.point === b.point ? a.time - b.time : b.point - a.point));
-            leaderboard.push(rank);
+            leaderboard.push([...rank, ...unfinished]);
         }
 
         return leaderboard;
