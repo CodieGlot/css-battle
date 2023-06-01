@@ -1,11 +1,11 @@
-import { Column, Entity, JoinTable, ManyToMany } from 'typeorm';
+import { Column, Entity, JoinTable, ManyToMany, OneToMany } from 'typeorm';
 
 import { AbstractEntity } from '../../../common/abstract.entity';
 import { RoomStatus } from '../../../constants';
 import { UseDto } from '../../../decorators';
 import { Question } from '../../questions/entities';
-import type { PlayerDto } from '../dto/response';
 import { RoomDto } from '../dto/response';
+import { Player } from './player.entity';
 
 @Entity()
 @UseDto(RoomDto)
@@ -13,17 +13,11 @@ export class Room extends AbstractEntity<RoomDto> {
     @Column({ type: 'enum', enum: RoomStatus, default: RoomStatus.OPEN })
     status: RoomStatus;
 
-    @Column('jsonb', {
-        transformer: {
-            to(value: PlayerDto[]): string {
-                return JSON.stringify(value);
-            },
-            from(value: string): PlayerDto[] {
-                return JSON.parse(value);
-            }
-        }
-    })
-    participants: PlayerDto[];
+    @Column()
+    playerHostId: string;
+
+    @OneToMany(() => Player, (player) => player.room, { cascade: true })
+    players: Player[];
 
     @Column()
     roomCode: string;

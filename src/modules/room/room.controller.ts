@@ -45,10 +45,8 @@ export class RoomController implements OnModuleInit {
         description: 'Get room with roomCode'
     })
     @ApiOperation({ summary: 'Get room with roomCode' })
-    async getRoom(@AuthUser() user: User, @Param() roomCode: string) {
-        const { room } = await this.roomService.getPLayerRoomPlayerIndex(user, roomCode, false, false);
-
-        return room;
+    async getRoom(@Param('roomCode') roomCode: string) {
+        return this.roomService.findRoomByRoomCode(roomCode);
     }
 
     @Post(':roomCode/join')
@@ -72,7 +70,7 @@ export class RoomController implements OnModuleInit {
     })
     @ApiOperation({ summary: 'Leave room with roomcode' })
     async leaveRoom(@AuthUser() user: User, @Param('roomCode') roomCode: string) {
-        return this.roomService.joinRoom(this.ably, user, roomCode);
+        return this.roomService.leaveRoom(this.ably, user, roomCode);
     }
 
     @Post(':roomCode/update-status')

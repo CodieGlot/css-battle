@@ -6,29 +6,23 @@ import type Ably from 'ably';
 import { Repository } from 'typeorm';
 
 import { PlayerStatus, QuestionDifficulty, RoomStatus } from '../../constants';
-import { ApiConfigService } from '../../shared/services/api-config.service';
 import { QuestionsService } from '../questions/questions.service';
 import type { User } from '../users/entities';
-import { UsersService } from '../users/users.service';
 import type { QuestionQuantitiesDto, SubmitWorkDto } from './dto/request';
-import { PlayerDto } from './dto/response';
 import { PointInfoDto } from './dto/response/point-info.dto';
-import { Room } from './entities';
+import { Player, Room } from './entities';
 
 @Injectable()
 export class RoomService {
     constructor(
         @InjectRepository(Room) private readonly roomRepository: Repository<Room>,
-        private readonly usersService: UsersService,
-        private readonly questionsService: QuestionsService,
-        private readonly configService: ApiConfigService
+        @InjectRepository(Player) private readonly playerRepository: Repository<Player>,
+        private readonly questionsService: QuestionsService
     ) {}
 
     activeRooms: Set<string> = new Set();
 
     async createRoom(ably: Ably.Types.RealtimePromise, user: User): Promise<WsResponse<unknown>> {
-        const player = new PlayerDto({ ...user, status: PlayerStatus.WAITING, points: [], total: 0 });
-
         let roomCode: string;
 
         do {
@@ -36,8 +30,9 @@ export class RoomService {
         } while (this.activeRooms.has(roomCode));
 
         const roomEntity = this.roomRepository.create({
-            participants: [player],
-            roomCode
+            roomCode,
+            playerHostId: user.id,
+            players: [this.createPlayerFromUser(user)]
         });
 
         const room = await this.roomRepository.save(roomEntity);
@@ -62,34 +57,32 @@ export class RoomService {
         user: User,
         roomCode: string
     ): Promise<WsResponse<unknown>> {
-        const { player, room } = await this.getPLayerRoomPlayerIndex(user, roomCode, false, false);
+        const room = await this.findRoomByRoomCode(roomCode);
 
-        const playerIndex = this.findIndexOfParticipant(player.id, room.participants);
-
-        if (playerIndex !== -1) {
+        if (this.hasPlayerBeenInRoom(user.id, room.players)) {
             throw new BadRequestException('User has already been in this room');
+        }
+
+        if (room.status === RoomStatus.PROGRESS) {
+            throw new BadRequestException('Room has already been in progress');
+        } else if (room.players.length === 5) {
+            throw new BadRequestException('Room has been full');
         }
 
         const channel = ably.channels.get(roomCode);
 
-        if (room.status === RoomStatus.PROGRESS) {
-            throw new BadRequestException('Room has already been in progress');
-        } else if (room.participants.length === 5) {
-            throw new BadRequestException('Room has been full');
-        }
+        room.players.push(this.createPlayerFromUser(user));
 
-        room.participants = [...room.participants, player];
-
-        await this.roomRepository.update({ id: room.id }, { participants: room.participants });
+        await this.roomRepository.save(room);
 
         await channel.publish('roomUpdated', {
             room,
-            message: `Player ${player.username} has joined the room`
+            message: `Player ${user.username} has joined the room`
         });
 
         return {
             event: 'roomUpdated',
-            data: { room, message: `Player ${player.username} has joined the room` }
+            data: { room, message: `Player ${user.username} has joined the room` }
         };
     }
 
@@ -98,11 +91,15 @@ export class RoomService {
         user: User,
         roomCode: string
     ): Promise<WsResponse<unknown>> {
-        const { player, room, playerIndex } = await this.getPLayerRoomPlayerIndex(user, roomCode);
+        const room = await this.findRoomByRoomCode(roomCode);
+
+        if (!this.hasPlayerBeenInRoom(user.id, room.players)) {
+            throw new BadRequestException('Player has not been in this room');
+        }
 
         const channel = ably.channels.get(roomCode);
 
-        if (room.participants.length === 1) {
+        if (room.players.length === 1) {
             this.activeRooms.delete(roomCode);
 
             await this.roomRepository.delete({ id: room.id });
@@ -110,18 +107,24 @@ export class RoomService {
             return { event: 'roomUpdated', data: { message: `Room ${roomCode} has been deleted` } };
         }
 
-        room.participants.splice(playerIndex, 1);
+        const playerIndex = this.findIndexOfPlayer(user.id, room.players);
 
-        await this.roomRepository.update({ id: room.id }, { participants: room.participants });
+        await this.playerRepository.delete({ id: room.players[playerIndex].id });
+
+        room.players.splice(playerIndex, 1);
+
+        room.playerHostId = room.players[0].userId;
+
+        await this.roomRepository.save(room);
 
         await channel.publish('roomUpdated', {
             room,
-            message: `Player ${player.username} has left the room`
+            message: `Player ${user.username} has left the room`
         });
 
         return {
             event: 'roomUpdated',
-            data: { room, message: `Player ${player.username} has left the room` }
+            data: { room, message: `Player ${user.username} has left the room` }
         };
     }
 
@@ -131,36 +134,35 @@ export class RoomService {
         roomCode: string,
         status: PlayerStatus
     ): Promise<WsResponse<unknown>> {
-        const { player, room, playerIndex } = await this.getPLayerRoomPlayerIndex(user, roomCode);
+        const room = await this.findRoomByRoomCode(roomCode);
+
+        if (!this.hasPlayerBeenInRoom(user.id, room.players)) {
+            throw new BadRequestException('Player has not been in this room');
+        }
 
         const channel = ably.channels.get(roomCode);
 
-        let message: string;
+        const playerIndex = this.findIndexOfPlayer(user.id, room.players);
+
+        let message = '';
 
         switch (status) {
             case PlayerStatus.READY: {
-                room.participants[playerIndex].status = PlayerStatus.READY;
-                message = `Player ${player.username} readies to start`;
+                message = `Player ${user.username} readies to start`;
 
                 break;
             }
 
             case PlayerStatus.WAITING: {
-                room.participants[playerIndex].status = PlayerStatus.WAITING;
-                message = `Player ${player.username} has changed to waiting state`;
-
-                break;
-            }
-
-            case PlayerStatus.FINISHED: {
-                room.participants[playerIndex].status = PlayerStatus.FINISHED;
-                message = `Player ${player.username} has finished the game`;
+                message = `Player ${user.username} has changed to waiting state`;
 
                 break;
             }
         }
 
-        await this.roomRepository.update({ id: room.id }, { participants: room.participants });
+        room.players[playerIndex].status = status;
+
+        await this.playerRepository.update({ id: room.players[playerIndex].id }, { status });
 
         await channel.publish('roomUpdated', { room, message });
 
@@ -184,12 +186,16 @@ export class RoomService {
             throw new BadRequestException('There should be at least 1 question to start');
         }
 
-        const { room, playerIndex } = await this.getPLayerRoomPlayerIndex(user, roomCode);
+        const room = await this.findRoomByRoomCode(roomCode);
+
+        if (!this.hasPlayerBeenInRoom(user.id, room.players)) {
+            throw new BadRequestException('Player has not been in this room');
+        }
 
         const channel = ably.channels.get(roomCode);
 
-        if (playerIndex === 0) {
-            if (!room.participants.every((participant) => participant.status === PlayerStatus.READY)) {
+        if (user.id === room.playerHostId) {
+            if (!room.players.every((player) => player.status === PlayerStatus.READY)) {
                 throw new BadRequestException('All players have not ready to start');
             }
 
@@ -210,8 +216,8 @@ export class RoomService {
 
             room.questions = [...easyQuestions, ...mediumQuestions, ...hardQuestions];
 
-            for (let i = 0; i !== room.participants.length; i++) {
-                room.participants[i].points = room.questions.map(
+            for (let i = 0; i !== room.players.length; i++) {
+                room.players[i].points = room.questions.map(
                     (question) =>
                         new PointInfoDto({
                             questionId: question.id,
@@ -239,46 +245,49 @@ export class RoomService {
         throw new BadRequestException('User is not the host of this room');
     }
 
-    async submitWork(
-        ably: Ably.Types.RealtimePromise,
-        user: User,
-        roomCode: string,
-        dto: SubmitWorkDto
-    ): Promise<WsResponse<unknown>> {
-        const { player, room, playerIndex } = await this.getPLayerRoomPlayerIndex(user, roomCode, true);
+    async submitWork(ably: Ably.Types.RealtimePromise, user: User, roomCode: string, dto: SubmitWorkDto) {
+        let room = await this.findRoomByRoomCode(roomCode);
+
+        if (!this.hasPlayerBeenInRoom(user.id, room.players)) {
+            throw new BadRequestException('Player has not been in this room');
+        }
 
         const channel = ably.channels.get(roomCode);
 
-        const questionIndex = this.findIndexOfQuestion(dto.questionId, room.participants[playerIndex].points);
+        const playerIndex = this.findIndexOfPlayer(user.id, room.players);
+
+        const player = await this.playerRepository.findOne({ where: { id: room.players[playerIndex].id } });
+
+        const questionIndex = this.findIndexOfQuestion(dto.questionId, player?.points as PointInfoDto[]);
 
         if (questionIndex === -1) {
-            throw new BadRequestException('Question ID invalid');
-        }
-
-        const currentPoint = room.participants[playerIndex].points[questionIndex].point,
-            currentTime = room.participants[playerIndex].points[questionIndex].time;
-
-        if (currentPoint === 0 && currentTime === 0) {
-            room.participants[playerIndex].points[questionIndex].point = dto.point;
-            room.participants[playerIndex].points[questionIndex].time = dto.time;
-
-            room.participants[playerIndex].total += dto.point;
+            throw new BadRequestException('Invalid question id');
         } else {
-            throw new BadRequestException('Player has already submitted this question');
+            if (player?.points[questionIndex].time === 0) {
+                player.points[questionIndex].point = dto.point;
+                player.points[questionIndex].time = dto.time;
+
+                room.players[playerIndex].points[questionIndex].point = dto.point;
+                room.players[playerIndex].points[questionIndex].time = dto.time;
+            } else {
+                throw new BadRequestException('Player has already submitted this question.');
+            }
         }
 
-        const leaderboard = this.createLeaderBoard(room.participants);
+        const leaderboard = this.createLeaderboard(room.players);
 
-        if (
-            room.participants[playerIndex].points.every((points) => points.point !== 0 || points.time !== 0)
-        ) {
-            room.participants[playerIndex].status = PlayerStatus.FINISHED;
+        if (player.points.every((pointInfo) => pointInfo.time !== 0)) {
+            player.status = PlayerStatus.FINISHED;
 
-            const summary = this.createSummaryBoard(room.participants);
+            await this.playerRepository.save(player);
+
+            const summary = this.createSummary(room.players);
 
             const rank = this.findRankOfSummary(summary, player.username);
 
-            if (room.participants.every((participant) => participant.status === PlayerStatus.FINISHED)) {
+            room = await this.findRoomByRoomCode(roomCode);
+
+            if (room.players.every((p) => p.status === PlayerStatus.FINISHED)) {
                 room.status = RoomStatus.CLOSED;
 
                 // NOTE: FIX HERE TO SAVE MATCH RESULT
@@ -296,7 +305,7 @@ export class RoomService {
                 };
             }
 
-            await this.roomRepository.save(room);
+            await this.playerRepository.update({ id: player.id }, { points: player.points });
 
             await channel.publish('playerFinished', {
                 leaderboard,
@@ -314,7 +323,7 @@ export class RoomService {
             };
         }
 
-        await this.roomRepository.save(room);
+        await this.playerRepository.update({ id: player.id }, { points: player.points });
 
         await channel.publish('progressUpdated', {
             leaderboard,
@@ -334,28 +343,28 @@ export class RoomService {
         };
     }
 
-    createLeaderBoard(participants: PlayerDto[]) {
+    createLeaderboard(players: Player[]) {
         const leaderboard: any[] = [];
 
-        for (let i = 0; i !== participants[0].points.length; i++) {
+        for (let i = 0; i !== players[0].points.length; i++) {
             const rank: any[] = [],
                 unfinished: any[] = [];
 
-            for (const participant of participants) {
-                if (participant.points[i].time === 0) {
+            for (const player of players) {
+                if (player.points[i].time === 0) {
                     unfinished.push({
-                        username: participant.username,
-                        point: participant.points[i].point,
-                        time: participant.points[i].time
+                        username: player.username,
+                        point: player.points[i].point,
+                        time: player.points[i].time
                     });
 
                     continue;
                 }
 
                 rank.push({
-                    username: participant.username,
-                    point: participant.points[i].point,
-                    time: participant.points[i].time
+                    username: player.username,
+                    point: player.points[i].point,
+                    time: player.points[i].time
                 });
             }
 
@@ -366,20 +375,22 @@ export class RoomService {
         return leaderboard;
     }
 
-    createSummaryBoard(participants: PlayerDto[]) {
+    createSummary(players: Player[]) {
         const summary: any[] = [];
 
-        for (const participant of participants) {
-            let time = 0;
+        for (const player of players) {
+            let point = 0,
+                time = 0;
 
-            for (const points of participant.points) {
-                time += points.time;
+            for (const pointInfo of player.points) {
+                point += pointInfo.point;
+                time += pointInfo.time;
             }
 
             summary.push({
-                username: participant.username,
-                status: participant.status,
-                point: participant.total,
+                username: player.username,
+                status: player.status,
+                point,
                 time
             });
         }
@@ -403,38 +414,27 @@ export class RoomService {
         return rank === 1 ? '1st' : rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`;
     }
 
-    async getPLayerRoomPlayerIndex(user: User, roomCode: string, getQuestions = false, getIndex = true) {
-        const player = new PlayerDto({ ...user, status: PlayerStatus.WAITING, points: [], total: 0 });
+    createPlayerFromUser(user: User) {
+        return this.playerRepository.create({
+            userId: user.id,
+            username: user.username,
+            avatarUrl: user.avatarUrl
+        });
+    }
 
-        const room = await (getQuestions
-            ? this.roomRepository.findOne({
-                  relations: {
-                      questions: true
-                  },
-                  where: { roomCode }
-              })
-            : this.findActiveRoomByCode(roomCode));
-
-        if (!room) {
-            throw new BadRequestException('Room not found');
-        }
-
-        let playerIndex = -1;
-
-        if (getIndex) {
-            playerIndex = this.findIndexOfParticipant(player.username, room.participants);
-
-            if (playerIndex === -1) {
-                throw new BadRequestException('User is not in this room');
+    hasPlayerBeenInRoom(id: string, players: Player[]) {
+        for (const player of players) {
+            if (id === player.userId) {
+                return true;
             }
         }
 
-        return { player, room, playerIndex };
+        return false;
     }
 
-    findIndexOfParticipant(username: string, participants: PlayerDto[]) {
-        for (let i = 0; i !== participants.length; i++) {
-            if (username === participants[i].username) {
+    findIndexOfPlayer(id: string, players: Player[]) {
+        for (let i = 0; i !== players.length; i++) {
+            if (id === players[i].userId) {
                 return i;
             }
         }
@@ -452,20 +452,18 @@ export class RoomService {
         return -1;
     }
 
-    async findActiveRoomByCode(roomCode: string) {
-        return this.roomRepository.findOne({
-            where: {
-                roomCode,
-                status: RoomStatus.OPEN || RoomStatus.PROGRESS
-            }
+    async findRoomByRoomCode(roomCode: string) {
+        const room = await this.roomRepository.findOne({
+            relations: {
+                players: true
+            },
+            where: { roomCode }
         });
-    }
 
-    async findAllActiveRooms() {
-        return this.roomRepository.find({
-            where: {
-                status: RoomStatus.OPEN || RoomStatus.PROGRESS
-            }
-        });
+        if (!room) {
+            throw new BadRequestException('Room not found');
+        }
+
+        return room;
     }
 }

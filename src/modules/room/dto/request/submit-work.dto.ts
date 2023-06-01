@@ -7,6 +7,6 @@ export class SubmitWorkDto {
     @NumberField({ int: true, minimum: 0, maximum: 100 })
     point: number;
 
-    @NumberField({ int: true, minimum: 0 })
+    @NumberField({ int: true, minimum: 1 })
     time: number;
 }
