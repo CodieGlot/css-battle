@@ -290,8 +290,7 @@ export class RoomService {
             if (room.players.every((p) => p.status === PlayerStatus.FINISHED)) {
                 room.status = RoomStatus.CLOSED;
 
-                // NOTE: FIX HERE TO SAVE MATCH RESULT
-                await this.roomRepository.delete({ id: room.id });
+                await this.roomRepository.save(room);
 
                 await channel.publish('playerFinished', {
                     leaderboard,
@@ -465,5 +464,14 @@ export class RoomService {
         }
 
         return room;
+    }
+
+    async getResultBoard(roomCode: string) {
+        const room = await this.findRoomByRoomCode(roomCode);
+
+        return {
+            leaderboard: this.createLeaderboard(room.players),
+            summary: this.createSummary(room.players)
+        };
     }
 }

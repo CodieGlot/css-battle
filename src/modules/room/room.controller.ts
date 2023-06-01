@@ -109,7 +109,6 @@ export class RoomController implements OnModuleInit {
     @Auth([UserRole.ADMIN, UserRole.USER])
     @HttpCode(HttpStatus.OK)
     @ApiOkResponse({
-        type: Room,
         description: 'Submit work'
     })
     @ApiOperation({ summary: 'Submit work' })
@@ -119,5 +118,16 @@ export class RoomController implements OnModuleInit {
         @Body() dto: SubmitWorkDto
     ) {
         return this.roomService.submitWork(this.ably, user, roomCode, dto);
+    }
+
+    @Get(':roomCode/result-board')
+    @Auth([UserRole.ADMIN, UserRole.USER])
+    @HttpCode(HttpStatus.OK)
+    @ApiOkResponse({
+        description: 'Submit work'
+    })
+    @ApiOperation({ summary: 'Submit work' })
+    async getResultBoard(@Param('roomCode') roomCode: string) {
+        return this.roomService.getResultBoard(roomCode);
     }
 }
