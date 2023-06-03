@@ -3,12 +3,16 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { WsResponse } from '@nestjs/websockets';
 import type Ably from 'ably';
+import axios from 'axios';
+import pixelmatch from 'pixelmatch';
+import { PNG } from 'pngjs';
+import * as puppeteer from 'puppeteer';
 import { Repository } from 'typeorm';
 
 import { PlayerStatus, QuestionDifficulty, RoomStatus } from '../../constants';
 import { QuestionsService } from '../questions/questions.service';
 import type { User } from '../users/entities';
-import type { QuestionQuantitiesDto, SubmitWorkDto } from './dto/request';
+import type { QuestionQuantitiesDto, WorkDto } from './dto/request';
 import { PointInfoDto } from './dto/response/point-info.dto';
 import { Player, Room } from './entities';
 
@@ -245,7 +249,13 @@ export class RoomService {
         throw new BadRequestException('User is not the host of this room');
     }
 
-    async submitWork(ably: Ably.Types.RealtimePromise, user: User, roomCode: string, dto: SubmitWorkDto) {
+    async checkWork(dto: WorkDto) {
+        const question = await this.questionsService.findQuestionById(dto.questionId);
+
+        return this.compareImage(dto.htmlCode, question.imageUrl);
+    }
+
+    async submitWork(ably: Ably.Types.RealtimePromise, user: User, roomCode: string, dto: WorkDto) {
         let room = await this.findRoomByRoomCode(roomCode);
 
         if (!this.hasPlayerBeenInRoom(user.id, room.players)) {
@@ -260,14 +270,16 @@ export class RoomService {
 
         const questionIndex = this.findIndexOfQuestion(dto.questionId, player?.points as PointInfoDto[]);
 
+        const point = await this.checkWork(dto);
+
         if (questionIndex === -1) {
             throw new BadRequestException('Invalid question id');
         } else {
             if (player?.points[questionIndex].time === 0) {
-                player.points[questionIndex].point = dto.point;
+                player.points[questionIndex].point = point;
                 player.points[questionIndex].time = dto.time;
 
-                room.players[playerIndex].points[questionIndex].point = dto.point;
+                room.players[playerIndex].points[questionIndex].point = point;
                 room.players[playerIndex].points[questionIndex].time = dto.time;
             } else {
                 throw new BadRequestException('Player has already submitted this question.');
@@ -326,16 +338,14 @@ export class RoomService {
 
         await channel.publish('progressUpdated', {
             leaderboard,
-            message: `Player ${player.username} has earned ${dto.point} points to question ${
-                questionIndex + 1
-            }`
+            message: `Player ${player.username} has earned ${point} points to question ${questionIndex + 1}`
         });
 
         return {
             event: 'progressUpdated',
             data: {
                 leaderboard,
-                message: `Player ${player.username} has earned ${dto.point} points to question ${
+                message: `Player ${player.username} has earned ${point} points to question ${
                     questionIndex + 1
                 }`
             }
@@ -473,5 +483,44 @@ export class RoomService {
             leaderboard: this.createLeaderboard(room.players),
             summary: this.createSummary(room.players)
         };
+    }
+
+    async convertHtmlToImage(htmlCode: string): Promise<Buffer> {
+        const browser = await puppeteer.launch();
+        const page = await browser.newPage();
+        await page.setViewport({
+            width: 400,
+            height: 300,
+            deviceScaleFactor: 1
+        });
+        await page.setContent(htmlCode);
+        const imgBuffer = await page.screenshot({
+            encoding: 'binary'
+        });
+        await browser.close();
+
+        return imgBuffer;
+    }
+
+    async compareImage(htmlCode: string, imageUrl: string): Promise<number> {
+        const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        const imgDestination = PNG.sync.read(response.data);
+        const imgCheckBuffer = await this.convertHtmlToImage(htmlCode);
+        const imgCheck = PNG.sync.read(imgCheckBuffer);
+
+        if (imgDestination.width !== imgCheck.width || imgDestination.height !== imgCheck.height) {
+            return 0; // Return 0 if image sizes do not match
+        }
+
+        const { width, height, data } = imgDestination;
+        const diff = new PNG({ width, height });
+        const difference = pixelmatch(data, imgCheck.data, diff.data, width, height, {
+            threshold: 0.1
+        });
+
+        const compatibility = 100 - (difference * 100) / (width * height);
+
+        return Number(compatibility.toFixed(2));
     }
 }

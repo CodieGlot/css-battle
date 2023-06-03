@@ -7,7 +7,7 @@ import { UserRole } from '../../constants';
 import { Auth, AuthUser } from '../../decorators';
 import { ApiConfigService } from '../../shared/services/api-config.service';
 import { User } from '../users/entities';
-import { QuestionQuantitiesDto, SubmitWorkDto, UpdateStatusDto } from './dto/request';
+import { QuestionQuantitiesDto, UpdateStatusDto, WorkDto } from './dto/request';
 import { Room } from './entities';
 import { RoomService } from './room.service';
 
@@ -35,18 +35,6 @@ export class RoomController implements OnModuleInit {
     @ApiOperation({ summary: 'Create room with random code' })
     async createRoom(@AuthUser() user: User) {
         return this.roomService.createRoom(this.ably, user);
-    }
-
-    @Get(':roomCode')
-    @Auth([UserRole.ADMIN, UserRole.USER])
-    @HttpCode(HttpStatus.OK)
-    @ApiOkResponse({
-        type: Room,
-        description: 'Get room with roomCode'
-    })
-    @ApiOperation({ summary: 'Get room with roomCode' })
-    async getRoom(@Param('roomCode') roomCode: string) {
-        return this.roomService.findRoomByRoomCode(roomCode);
     }
 
     @Post(':roomCode/join')
@@ -105,6 +93,19 @@ export class RoomController implements OnModuleInit {
         return this.roomService.startGame(this.ably, user, roomCode, dto);
     }
 
+    @Post(':roomCode/check')
+    @Auth([UserRole.ADMIN, UserRole.USER])
+    @HttpCode(HttpStatus.OK)
+    @ApiOkResponse({
+        description: 'Check the score of the work'
+    })
+    @ApiOperation({ summary: 'Check the score of the work' })
+    async checkWork(@Body() dto: WorkDto) {
+        const point = await this.checkWork(dto);
+
+        return { point };
+    }
+
     @Post(':roomCode/submit')
     @Auth([UserRole.ADMIN, UserRole.USER])
     @HttpCode(HttpStatus.OK)
@@ -112,21 +113,29 @@ export class RoomController implements OnModuleInit {
         description: 'Submit work'
     })
     @ApiOperation({ summary: 'Submit work' })
-    async submitWork(
-        @AuthUser() user: User,
-        @Param('roomCode') roomCode: string,
-        @Body() dto: SubmitWorkDto
-    ) {
+    async submitWork(@AuthUser() user: User, @Param('roomCode') roomCode: string, @Body() dto: WorkDto) {
         return this.roomService.submitWork(this.ably, user, roomCode, dto);
+    }
+
+    @Get(':roomCode')
+    @Auth([UserRole.ADMIN, UserRole.USER])
+    @HttpCode(HttpStatus.OK)
+    @ApiOkResponse({
+        type: Room,
+        description: 'Get room with roomCode'
+    })
+    @ApiOperation({ summary: 'Get room with roomCode' })
+    async getRoom(@Param('roomCode') roomCode: string) {
+        return this.roomService.findRoomByRoomCode(roomCode);
     }
 
     @Get(':roomCode/result-board')
     @Auth([UserRole.ADMIN, UserRole.USER])
     @HttpCode(HttpStatus.OK)
     @ApiOkResponse({
-        description: 'Submit work'
+        description: 'Get result board at current time'
     })
-    @ApiOperation({ summary: 'Submit work' })
+    @ApiOperation({ summary: 'Get result board at current time' })
     async getResultBoard(@Param('roomCode') roomCode: string) {
         return this.roomService.getResultBoard(roomCode);
     }

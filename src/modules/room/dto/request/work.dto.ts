@@ -1,11 +1,11 @@
 import { NumberField, StringField } from '../../../../decorators';
 
-export class SubmitWorkDto {
+export class WorkDto {
     @StringField()
     questionId: string;
 
-    @NumberField({ int: true, minimum: 0, maximum: 100 })
-    point: number;
+    @StringField()
+    htmlCode: string;
 
     @NumberField({ int: true, minimum: 1 })
     time: number;
