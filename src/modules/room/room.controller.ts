@@ -93,7 +93,7 @@ export class RoomController implements OnModuleInit {
         return this.roomService.startGame(this.ably, user, roomCode, dto);
     }
 
-    @Post(':roomCode/check')
+    @Post('check')
     @Auth([UserRole.ADMIN, UserRole.USER])
     @HttpCode(HttpStatus.OK)
     @ApiOkResponse({
@@ -101,7 +101,7 @@ export class RoomController implements OnModuleInit {
     })
     @ApiOperation({ summary: 'Check the score of the work' })
     async checkWork(@Body() dto: WorkDto) {
-        const point = await this.checkWork(dto);
+        const point = await this.roomService.checkWork(dto);
 
         return { point };
     }
