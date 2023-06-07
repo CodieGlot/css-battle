@@ -7,6 +7,7 @@ import axios from 'axios';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 import * as puppeteer from 'puppeteer';
+import sharp from 'sharp';
 import { Repository } from 'typeorm';
 
 import { PlayerStatus, QuestionDifficulty, RoomStatus } from '../../constants';
@@ -504,20 +505,42 @@ export class RoomService {
 
     async compareImage(htmlCode: string, imageUrl: string): Promise<number> {
         const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-        const imgDestination = PNG.sync.read(response.data);
+
         const imgCheckBuffer = await this.convertHtmlToImage(htmlCode);
         const imgCheck = PNG.sync.read(imgCheckBuffer);
 
-        if (imgDestination.width !== imgCheck.width || imgDestination.height !== imgCheck.height) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        const imgDestination = PNG.sync.read(response.data);
+        const { width, height, data } = imgDestination;
+        const halfWidth = Math.floor(width / 2);
+        const halfHeight = Math.floor(height / 2);
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        const resizedImageBuffer = await sharp(data, { raw: { width, height, channels: 4 } })
+            .resize(halfWidth, halfHeight)
+            .raw()
+            .toBuffer();
+
+        const resizedImgDestination = PNG.sync.read(resizedImageBuffer);
+
+        if (
+            resizedImgDestination.width !== imgCheck.width ||
+            resizedImgDestination.height !== imgCheck.height
+        ) {
             return 0; // Return 0 if image sizes do not match
         }
 
-        const { width, height, data } = imgDestination;
-        const diff = new PNG({ width, height });
-        const difference = pixelmatch(data, imgCheck.data, diff.data, width, height, {
-            threshold: 0.1
-        });
+        const diff = new PNG({ width: resizedImgDestination.width, height: resizedImgDestination.height });
+        const difference = pixelmatch(
+            resizedImgDestination.data,
+            imgCheck.data,
+            diff.data,
+            resizedImgDestination.width,
+            resizedImgDestination.height,
+            {
+                threshold: 0.1
+            }
+        );
 
         const compatibility = 100 - (difference * 100) / (width * height);
 
