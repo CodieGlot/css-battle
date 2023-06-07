@@ -399,7 +399,7 @@ export class RoomService {
             summary.push({
                 username: player.username,
                 status: player.status,
-                point,
+                point: Number(point.toFixed(2)),
                 time
             });
         }
