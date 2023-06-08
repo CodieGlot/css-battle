@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { WsResponse } from '@nestjs/websockets';
 import type Ably from 'ably';
@@ -549,5 +550,14 @@ export class RoomService {
         const compatibility = 100 - (difference * 100) / (width * height);
 
         return Number(compatibility.toFixed(2));
+    }
+
+    @Cron('* * 5 * * *', {
+        timeZone: 'Asia/Ho_Chi_Minh'
+    })
+    async clearAllRooms() {
+        this.activeRooms.clear();
+
+        return this.roomRepository.clear();
     }
 }
