@@ -13,9 +13,6 @@ export class Room extends AbstractEntity<RoomDto> {
     @Column({ type: 'enum', enum: RoomStatus, default: RoomStatus.OPEN })
     status: RoomStatus;
 
-    @Column()
-    playerHostId: string;
-
     @OneToMany(() => Player, (player) => player.room, { cascade: true })
     players: Player[];
 

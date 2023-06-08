@@ -11,13 +11,9 @@ export class RoomDto extends AbstractDto {
     @ApiProperty()
     roomCode: string;
 
-    @ApiProperty()
-    playerHostId: string;
-
     constructor(room: Room) {
         super(room);
         this.status = room.status;
         this.roomCode = room.roomCode;
-        this.playerHostId = room.playerHostId;
     }
 }

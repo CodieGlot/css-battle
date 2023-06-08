@@ -36,8 +36,7 @@ export class RoomService {
 
         const roomEntity = this.roomRepository.create({
             roomCode,
-            playerHostId: user.id,
-            players: [this.createPlayerFromUser(user)]
+            players: [this.createPlayerFromUser(user, 0)]
         });
 
         const room = await this.roomRepository.save(roomEntity);
@@ -76,9 +75,11 @@ export class RoomService {
 
         const channel = ably.channels.get(roomCode);
 
-        room.players.push(this.createPlayerFromUser(user));
+        room.players.push(this.createPlayerFromUser(user, room.players.length));
 
         await this.roomRepository.save(room);
+
+        room.players.sort((a, b) => a.playerIndex - b.playerIndex);
 
         await channel.publish('roomUpdated', {
             room,
@@ -116,11 +117,19 @@ export class RoomService {
 
         await this.playerRepository.delete({ id: room.players[playerIndex].id });
 
+        const baseIndex = room.players[playerIndex].playerIndex;
+
+        for (let i = 0; i !== room.players.length; i++) {
+            if (room.players[i].playerIndex > baseIndex) {
+                room.players[i].playerIndex--;
+            }
+        }
+
         room.players.splice(playerIndex, 1);
 
-        room.playerHostId = room.players[0].userId;
-
         await this.roomRepository.save(room);
+
+        room.players.sort((a, b) => a.playerIndex - b.playerIndex);
 
         await channel.publish('roomUpdated', {
             room,
@@ -169,6 +178,8 @@ export class RoomService {
 
         await this.playerRepository.update({ id: room.players[playerIndex].id }, { status });
 
+        room.players.sort((a, b) => a.playerIndex - b.playerIndex);
+
         await channel.publish('roomUpdated', { room, message });
 
         return {
@@ -199,7 +210,7 @@ export class RoomService {
 
         const channel = ably.channels.get(roomCode);
 
-        if (user.id === room.playerHostId) {
+        if (user.id === this.findHostId(room.players)) {
             if (!room.players.every((player) => player.status === PlayerStatus.READY)) {
                 throw new BadRequestException('All players have not ready to start');
             }
@@ -235,6 +246,8 @@ export class RoomService {
             room.status = RoomStatus.PROGRESS;
 
             await this.roomRepository.save(room);
+
+            room.players.sort((a, b) => a.playerIndex - b.playerIndex);
 
             await channel.publish('gameStarted', {
                 room,
@@ -305,6 +318,8 @@ export class RoomService {
 
                 await this.roomRepository.save(room);
 
+                room.players.sort((a, b) => a.playerIndex - b.playerIndex);
+
                 await channel.publish('playerFinished', {
                     leaderboard,
                     summary,
@@ -318,6 +333,8 @@ export class RoomService {
             }
 
             await this.playerRepository.update({ id: player.id }, { points: player.points });
+
+            room.players.sort((a, b) => a.playerIndex - b.playerIndex);
 
             await channel.publish('playerFinished', {
                 leaderboard,
@@ -336,6 +353,8 @@ export class RoomService {
         }
 
         await this.playerRepository.update({ id: player.id }, { points: player.points });
+
+        room.players.sort((a, b) => a.playerIndex - b.playerIndex);
 
         await channel.publish('progressUpdated', {
             leaderboard,
@@ -424,11 +443,22 @@ export class RoomService {
         return rank === 1 ? '1st' : rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`;
     }
 
-    createPlayerFromUser(user: User) {
+    findHostId(players: Player[]) {
+        for (let i = 0; i !== players.length; i++) {
+            if (players[i].playerIndex === 0) {
+                return players[i].userId;
+            }
+        }
+
+        return '';
+    }
+
+    createPlayerFromUser(user: User, index: number) {
         return this.playerRepository.create({
             userId: user.id,
             username: user.username,
-            avatarUrl: user.avatarUrl
+            avatarUrl: user.avatarUrl,
+            playerIndex: index
         });
     }
 

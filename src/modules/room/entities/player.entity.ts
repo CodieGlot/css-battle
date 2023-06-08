@@ -18,6 +18,9 @@ export class Player {
     @Column()
     avatarUrl: string;
 
+    @Column('int')
+    playerIndex: number;
+
     @Column({ type: 'enum', enum: PlayerStatus, default: PlayerStatus.WAITING })
     status: PlayerStatus;
 
