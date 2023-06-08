@@ -7,7 +7,6 @@ import axios from 'axios';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 import * as puppeteer from 'puppeteer';
-import sharp from 'sharp';
 import { Repository } from 'typeorm';
 
 import { PlayerStatus, QuestionDifficulty, RoomStatus } from '../../constants';
@@ -505,38 +504,43 @@ export class RoomService {
 
     async compareImage(htmlCode: string, imageUrl: string): Promise<number> {
         const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        const imgDestination = PNG.sync.read(response.data);
+        const { width, height, data } = imgDestination;
+
+        const halfWidth = Math.floor(width / 2);
+        const halfHeight = Math.floor(height / 2);
+
+        const resizedImageData = new Uint8Array(halfWidth * halfHeight * 4);
+        let index = 0;
+
+        for (let y = 0; y < height; y += 2) {
+            for (let x = 0; x < width; x += 2) {
+                const dataIndex = (y * width + x) * 4;
+                resizedImageData[index++] = data[dataIndex];
+                resizedImageData[index++] = data[dataIndex + 1];
+                resizedImageData[index++] = data[dataIndex + 2];
+                resizedImageData[index++] = data[dataIndex + 3];
+            }
+        }
+
+        const resizedImgDestination = new PNG({ width: halfWidth, height: halfHeight });
+        resizedImgDestination.data = resizedImageData;
 
         const imgCheckBuffer = await this.convertHtmlToImage(htmlCode);
         const imgCheck = PNG.sync.read(imgCheckBuffer);
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-        const imgDestination = PNG.sync.read(response.data);
-        const { width, height, data } = imgDestination;
-        const halfWidth = Math.floor(width / 2);
-        const halfHeight = Math.floor(height / 2);
+        /* if (width !== imgCheck.width || height !== imgCheck.height) {
+            return 0;
+        } */
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-        const resizedImageBuffer = await sharp(data, { raw: { width, height, channels: 4 } })
-            .resize(halfWidth, halfHeight)
-            .raw()
-            .toBuffer();
-
-        const resizedImgDestination = PNG.sync.read(resizedImageBuffer);
-
-        if (
-            resizedImgDestination.width !== imgCheck.width ||
-            resizedImgDestination.height !== imgCheck.height
-        ) {
-            return 0; // Return 0 if image sizes do not match
-        }
-
-        const diff = new PNG({ width: resizedImgDestination.width, height: resizedImgDestination.height });
+        const diff = new PNG({ halfWidth, halfHeight });
         const difference = pixelmatch(
             resizedImgDestination.data,
             imgCheck.data,
             diff.data,
-            resizedImgDestination.width,
-            resizedImgDestination.height,
+            halfWidth,
+            halfHeight,
             {
                 threshold: 0.1
             }
