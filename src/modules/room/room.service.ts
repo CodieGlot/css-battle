@@ -217,17 +217,20 @@ export class RoomService {
 
             const easyQuestions = await this.questionsService.getRandomQuestions(
                 dto.numOfEasy,
-                QuestionDifficulty.EASY
+                QuestionDifficulty.EASY,
+                dto.collectionCode
             );
 
             const mediumQuestions = await this.questionsService.getRandomQuestions(
                 dto.numOfMedium,
-                QuestionDifficulty.MEDIUM
+                QuestionDifficulty.MEDIUM,
+                dto.collectionCode
             );
 
             const hardQuestions = await this.questionsService.getRandomQuestions(
                 dto.numOfHard,
-                QuestionDifficulty.HARD
+                QuestionDifficulty.HARD,
+                dto.collectionCode
             );
 
             room.questions = [...easyQuestions, ...mediumQuestions, ...hardQuestions];

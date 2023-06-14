@@ -14,10 +14,14 @@ export class QuestionDto extends AbstractDto {
     @ApiProperty()
     difficulty: QuestionDifficulty;
 
+    @ApiProperty()
+    collectionCode: string;
+
     constructor(question: Question) {
         super(question);
         this.imageUrl = question.imageUrl;
         this.colors = question.colors;
         this.difficulty = question.difficulty;
+        this.collectionCode = question.collectionCode;
     }
 }

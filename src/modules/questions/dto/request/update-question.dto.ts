@@ -17,4 +17,7 @@ export class UpdateQuestionDto {
 
     @EnumFieldOptional(() => QuestionDifficulty, { example: QuestionDifficulty.EASY })
     difficulty: QuestionDifficulty;
+
+    @StringFieldOptional()
+    collectionCode: string;
 }

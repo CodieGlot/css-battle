@@ -16,4 +16,7 @@ export class NewQuestionDto {
 
     @EnumField(() => QuestionDifficulty, { example: QuestionDifficulty.EASY })
     difficulty: QuestionDifficulty;
+
+    @StringField({ default: '000000' })
+    collectionCode = '000000';
 }

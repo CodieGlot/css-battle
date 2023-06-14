@@ -1,4 +1,4 @@
-import { NumberField } from '../../../../decorators';
+import { NumberField, StringField } from '../../../../decorators';
 
 export class QuestionQuantitiesDto {
     @NumberField({ int: true, minimum: 0 })
@@ -9,4 +9,7 @@ export class QuestionQuantitiesDto {
 
     @NumberField({ int: true, minimum: 0 })
     numOfHard: number;
+
+    @StringField({ default: '000000' })
+    collectionCode = '000000';
 }

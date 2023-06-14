@@ -16,4 +16,7 @@ export class Question extends AbstractEntity<QuestionDto> {
 
     @Column({ type: 'enum', enum: QuestionDifficulty })
     difficulty: QuestionDifficulty;
+
+    @Column({ default: '000000' })
+    collectionCode: string;
 }

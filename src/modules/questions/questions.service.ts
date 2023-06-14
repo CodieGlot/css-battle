@@ -65,7 +65,7 @@ export class QuestionsService {
         return new ResponseDto({ message: 'Delete question succesfully' });
     }
 
-    async getRandomQuestions(number: number, difficulty?: QuestionDifficulty) {
+    async getRandomQuestions(number: number, difficulty?: QuestionDifficulty, collectionCode?: string) {
         if (!number || number === 0) {
             return [];
         }
@@ -73,8 +73,14 @@ export class QuestionsService {
         const queryBuilder = this.questionRepository.createQueryBuilder('question');
 
         if (difficulty) {
-            queryBuilder.where('question.difficulty = :difficulty', { difficulty });
+            queryBuilder.andWhere('question.difficulty = :difficulty', { difficulty });
         }
+
+        if (!collectionCode) {
+            collectionCode = '000000';
+        }
+
+        queryBuilder.andWhere('question.collectionCode = :collectionCode', { collectionCode });
 
         return queryBuilder.orderBy('RANDOM()').limit(number).getMany();
     }
