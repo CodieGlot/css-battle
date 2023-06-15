@@ -8,5 +8,5 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x -o nodesource_setup.sh
 RUN bash nodesource_setup.sh
 RUN apt-get install nodejs -y
 RUN npm install -f
-RUN npm run build
+RUN npm run build:prod
 CMD ["npm", "run", "start:prod"]
