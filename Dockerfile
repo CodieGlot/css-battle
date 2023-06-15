@@ -15,4 +15,6 @@ RUN npm install -f
 # Bundle app source
 COPY . .
 RUN npm run build:prod
-CMD ["npm", "run", "start:prod"]
+
+# Start the server using the production build
+CMD [ "node", "dist/main.js" ]
