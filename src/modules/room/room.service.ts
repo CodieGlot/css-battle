@@ -520,16 +520,21 @@ export class RoomService {
     }
 
     async convertHtmlToImage(htmlCode: string): Promise<Buffer> {
-        const browser = await puppeteer.launch();
-        const page = await browser.newPage();
-        await page.setViewport({
-            width: 400,
-            height: 300,
-            deviceScaleFactor: 1
+        const browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            executablePath: '/usr/bin/chromium-browser',
+            dumpio: true,
+            defaultViewport: {
+                width: 400,
+                height: 300
+            }
         });
-        await page.setContent(htmlCode);
+        const page = await browser.newPage();
+        await page.setContent(htmlCode, { waitUntil: 'networkidle0' });
         const imgBuffer = await page.screenshot({
-            encoding: 'binary'
+            omitBackground: true,
+            type: 'png'
         });
         await browser.close();
 
