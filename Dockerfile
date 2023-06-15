@@ -1,19 +1,11 @@
-FROM node:16-alpine
-
-# Create app directory
+FROM ubuntu:22.04
+RUN apt-get update
+RUN apt-get install curl openjdk-8-jdk build-essential chromium-browser -y
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x -o nodesource_setup.sh
+RUN bash nodesource_setup.sh
+RUN apt-get install nodejs -y
 WORKDIR /usr/src/app
-
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
-COPY package*.json ./
-
-# Install app dependencies
-RUN npm install
-
-# Bundle app source
 COPY . .
-
-# Creates a "dist" folder with the production build
-RUN npm run build:prod
-
-# Start the server using the production build
-CMD [ "node", "dist/main.js" ]
+RUN npm install -f
+RUN npm run build
+CMD ["npm", "run", "start:prod"]
