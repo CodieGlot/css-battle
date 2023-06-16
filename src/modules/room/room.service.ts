@@ -522,8 +522,8 @@ export class RoomService {
     async convertHtmlToImage(htmlCode: string): Promise<Buffer> {
         const browser = await puppeteer.launch({
             headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
-            executablePath: '/usr/bin/chromium-browser',
+            executablePath: '/usr/bin/google-chrome', //only enable for linux / docker
+            args: ['--no-sandbox', '--disable-gpu'],
             dumpio: true,
             defaultViewport: {
                 width: 400,
